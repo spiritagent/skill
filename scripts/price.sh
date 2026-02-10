@@ -59,8 +59,7 @@ if [[ "$HTTP_CODE" == "200" ]]; then
         inputUSD: .inputAmountUSD,
         outputUSD: .outputAmountUSD,
         minOutput: .minOutputAmount,
-        route: .route,
-        priceImpact: .priceImpact
+        route: .route
     }'
 else
     echo "❌ Price request failed (HTTP $HTTP_CODE)"

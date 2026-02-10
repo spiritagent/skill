@@ -32,7 +32,6 @@ TRADE_PAYLOAD=$(echo "$TRADE_DATA" | jq \
         amount_in: .amount_in,
         amount_out: .amount_out,
         price_usd: (.price_usd // null),
-        pnl_usd: (.pnl_usd // null),
         dex: (.dex // null),
         executed_at: .executed_at
     }'

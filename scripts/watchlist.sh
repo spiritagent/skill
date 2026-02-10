@@ -18,24 +18,29 @@ case "$ACTION" in
         
         echo "🔍 Adding $TOKEN_ADDRESS to watchlist..."
         
-        # Get token info first
-        TOKEN_INFO=$(curl -s "https://base.blockscout.com/api/v2/tokens/$TOKEN_ADDRESS" || echo '{"error":"failed"}')
+        # Get token info from DexScreener
+        TOKEN_RAW=$(curl -s "https://api.dexscreener.com/tokens/v1/base/$TOKEN_ADDRESS" || echo '[]')
+        BEST_PAIR=$(echo "$TOKEN_RAW" | jq '[.[] | select(.chainId == "base")] | sort_by(.liquidity.usd) | reverse | .[0] // empty' 2>/dev/null)
         
-        if echo "$TOKEN_INFO" | jq -e '.error' >/dev/null 2>&1; then
-            echo "❌ Failed to fetch token info"
+        if [[ -z "$BEST_PAIR" || "$BEST_PAIR" == "null" ]]; then
+            echo "❌ Token not found on DexScreener"
             exit 1
         fi
+        
+        SYMBOL=$(echo "$BEST_PAIR" | jq -r '.baseToken.symbol // "UNKNOWN"')
+        NAME=$(echo "$BEST_PAIR" | jq -r '.baseToken.name // "Unknown"')
         
         # Add to watchlist
         CURRENT=$(cat "$WATCHLIST_FILE")
         UPDATED=$(echo "$CURRENT" | jq \
-            --argjson token_info "$TOKEN_INFO" \
             --arg address "$TOKEN_ADDRESS" \
+            --arg symbol "$SYMBOL" \
+            --arg name "$NAME" \
             '
             .tokens |= (map(select(.address != $address)) + [{
                 address: $address,
-                symbol: $token_info.symbol,
-                name: $token_info.name,
+                symbol: $symbol,
+                name: $name,
                 added_at: (now | strftime("%Y-%m-%dT%H:%M:%SZ"))
             }]) |
             .lastUpdated = (now | strftime("%Y-%m-%dT%H:%M:%SZ"))
@@ -43,7 +48,7 @@ case "$ACTION" in
         )
         
         echo "$UPDATED" > "$WATCHLIST_FILE"
-        echo "✅ Added $(echo "$TOKEN_INFO" | jq -r '.symbol // .address') to watchlist"
+        echo "✅ Added $SYMBOL ($NAME) to watchlist"
         ;;
         
     "remove")

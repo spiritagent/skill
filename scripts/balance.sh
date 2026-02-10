@@ -24,16 +24,16 @@ if [[ -n "${PLATFORM_API_URL:-}" && -n "${PLATFORM_API_KEY:-}" ]]; then
             echo "$BALANCE_DATA" | jq '{
                 address: .address,
                 eth_balance: (.eth_balance + " ETH"),
-                usd_value: .eth_balance_usd
+                usd_value: .eth_usd
             }'
         else
             # Show specific token balance
             echo "$BALANCE_DATA" | jq --arg token "$TOKEN" '
-                .tokens[] | select(.token_address == ($token | ascii_downcase)) | {
-                    token: .token_symbol,
-                    address: .token_address,
+                .tokens[] | select(.address == ($token | ascii_downcase)) | {
+                    token: .symbol,
+                    address: .address,
                     balance: .balance,
-                    usd_value: .value_usd
+                    usd_value: .usd
                 }
             '
         fi
