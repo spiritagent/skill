@@ -36,13 +36,7 @@ if [[ "$HTTP_CODE" == "200" || "$HTTP_CODE" == "201" ]]; then
     echo "✅ Paired!"
     echo "$BODY" | jq -r '.data.message // "Success"' 2>/dev/null
 
-    # Auto-delete the pairing tweet
-    echo "🗑️  Deleting pairing tweet..."
-    if "$SCRIPT_DIR/twitter-action.sh" delete "{\"tweet_id\":\"$TWEET_ID\"}" 2>/dev/null; then
-        echo "✅ Pairing tweet deleted"
-    else
-        echo "⚠️  Could not delete tweet — you can remove it manually"
-    fi
+    echo "✅ Pairing tweet kept on timeline"
 else
     echo "❌ Failed (HTTP $HTTP_CODE)"
     echo "$BODY" | jq . 2>/dev/null || echo "$BODY"
