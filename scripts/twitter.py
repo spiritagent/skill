@@ -281,8 +281,9 @@ async def main():
 
                 if ref_tweet_id:
                     try:
-                        tweet = await client.get_tweet_by_id(ref_tweet_id)
-                        if tweet:
+                        tweets = await client.get_tweets_by_ids([ref_tweet_id])
+                        if tweets:
+                            tweet = tweets[0]
                             parent_content = tweet.text
                             if tweet.user:
                                 parent_author = tweet.user.screen_name
