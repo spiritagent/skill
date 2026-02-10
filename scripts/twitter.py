@@ -270,7 +270,7 @@ async def main():
                     'platform': 'x',
                     'action_type': action,
                     'content': result.get('text', ''),
-                    'external_id': result.get('tweet_id', result.get('liked', result.get('retweeted', result.get('followed', result.get('bookmarked', result.get('deleted', '')))))),
+                    'external_id': result.get('tweet_id', result.get('liked', result.get('unliked', result.get('retweeted', result.get('unretweeted', result.get('followed', result.get('unfollowed', result.get('bookmarked', result.get('unbookmarked', result.get('deleted', '')))))))))),
                     'external_url': f"https://x.com/i/status/{result.get('tweet_id', '')}" if result.get('tweet_id') else None,
                     'parent_external_id': result.get('reply_to', result.get('quoted', '')),
                     'posted_at': datetime.now(timezone.utc).isoformat(),
