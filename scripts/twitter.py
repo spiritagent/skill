@@ -266,13 +266,44 @@ async def main():
             try:
                 import urllib.request
                 from datetime import datetime, timezone
+
+                # Fetch referenced tweet metadata for actions that target a tweet
+                parent_content = None
+                parent_author = None
+                parent_author_name = None
+                parent_author_avatar = None
+                ref_tweet_id = None
+
+                if action in ('like', 'retweet', 'bookmark'):
+                    ref_tweet_id = args[0] if args else None
+                elif action in ('reply', 'quote'):
+                    ref_tweet_id = result.get('reply_to', result.get('quoted'))
+
+                if ref_tweet_id:
+                    try:
+                        tweet = await client.get_tweet_by_id(ref_tweet_id)
+                        if tweet:
+                            parent_content = tweet.text
+                            if tweet.user:
+                                parent_author = tweet.user.screen_name
+                                parent_author_name = tweet.user.name
+                                parent_author_avatar = tweet.user.profile_image_url
+                    except Exception:
+                        pass  # best effort
+
+                ext_id = result.get('tweet_id', result.get('liked', result.get('unliked', result.get('retweeted', result.get('unretweeted', result.get('followed', result.get('unfollowed', result.get('bookmarked', result.get('unbookmarked', result.get('deleted', ''))))))))))
+
                 report_data = json.dumps({
                     'platform': 'x',
                     'action_type': action,
                     'content': result.get('text', ''),
-                    'external_id': result.get('tweet_id', result.get('liked', result.get('unliked', result.get('retweeted', result.get('unretweeted', result.get('followed', result.get('unfollowed', result.get('bookmarked', result.get('unbookmarked', result.get('deleted', '')))))))))),
-                    'external_url': f"https://x.com/i/status/{result.get('tweet_id', '')}" if result.get('tweet_id') else None,
+                    'external_id': ext_id,
+                    'external_url': f"https://x.com/i/status/{ext_id}" if ext_id and action != 'follow' and action != 'unfollow' else None,
                     'parent_external_id': result.get('reply_to', result.get('quoted', '')),
+                    'parent_content': parent_content,
+                    'parent_author': parent_author,
+                    'parent_author_name': parent_author_name,
+                    'parent_author_avatar': parent_author_avatar,
                     'posted_at': datetime.now(timezone.utc).isoformat(),
                 }).encode()
                 req = urllib.request.Request(
