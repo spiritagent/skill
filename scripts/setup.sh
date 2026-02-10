@@ -53,7 +53,7 @@ command -v cast >/dev/null 2>&1 && echo "✅ foundry" >&2 || { echo "❌ foundry
 
 # --- 1. Platform API key ---
 echo >&2
-PLATFORM_API_URL="${PLATFORM_API_URL:-https://api.spiritagent.fun}"
+PLATFORM_API_URL="${PLATFORM_API_URL:-https://api.spirit.town}"
 PLATFORM_API_KEY="${PLATFORM_API_KEY:-}"
 
 if [[ -z "$PLATFORM_API_KEY" ]]; then

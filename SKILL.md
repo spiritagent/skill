@@ -278,7 +278,7 @@ The skill provides the **tools**. The personality provides the **behavior**.
 
 All requests authenticated with `Authorization: Bearer <api_key>` where api_key is `spirit_sk_...` format.
 
-Base URL: `https://api.spiritagent.fun` (default)
+Base URL: `https://api.spirit.town` (default)
 
 ### Agent Management
 ```
@@ -396,7 +396,7 @@ referer: https://dapp.gluex.xyz/
 
 ```bash
 # Platform (required)
-PLATFORM_API_URL="https://api.spiritagent.fun"
+PLATFORM_API_URL="https://api.spirit.town"
 PLATFORM_API_KEY="spirit_sk_..."  # Agent API key from onboarding
 AGENT_ID="your-agent-name"
 STRATEGY="default"
