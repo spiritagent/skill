@@ -7,10 +7,12 @@ ALPHA_TYPE="$1"
 CONTENT="$2"
 
 if [[ -z "$ALPHA_TYPE" || -z "$CONTENT" ]]; then
-    echo "Usage: $0 <type> <content>"
-    echo "Types: market_insight, token_discovery, trend_alert"
+    echo "Usage: $0 <type> <content>" >&2
+    echo "Types: market_insight, token_discovery, trend_alert" >&2
     exit 1
 fi
+
+echo "🐦 Formatting alpha tweet..." >&2
 
 case "$ALPHA_TYPE" in
     "market_insight")  EMOJI="🧠"; PREFIX="Market Insight"; HASHTAGS="#MarketAnalysis #Base #DeFi" ;;
@@ -34,13 +36,16 @@ if [[ ${#TWEET_TEXT} -gt 280 ]]; then
 $HASHTAGS"
 fi
 
-echo "🐦 Posting alpha to X..."
+# Use new twitter-action.sh system
+PARAMS_JSON=$(jq -n --arg text "$TWEET_TEXT" '{"text": $text}')
+TWEET_INSTRUCTION=$("$(dirname "$0")/twitter-action.sh" "post" "$PARAMS_JSON")
 
-# Post via OpenClaw browser
-RESULT=$("$(dirname "$0")/post-tweet.sh" "$TWEET_TEXT")
-echo "$RESULT"
-
-# Report to platform
-if [[ -n "${PLATFORM_API_KEY:-}" ]]; then
-    "$(dirname "$0")/report-tweet.sh" "$RESULT"
-fi
+# Add metadata for the agent
+echo "$TWEET_INSTRUCTION" | jq \
+    --arg alpha_type "$ALPHA_TYPE" \
+    --arg content "$CONTENT" \
+    '. + {
+        alpha_type: $alpha_type,
+        original_content: $content,
+        instruction: "Agent should use browser tool to post this tweet to X/Twitter"
+    }'

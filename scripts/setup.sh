@@ -1,157 +1,161 @@
 #!/bin/bash
 set -euo pipefail
 
-# Add foundry to PATH
 export PATH="$HOME/.foundry/bin:$PATH"
 
-# Source env if it exists
 ENV_FILE="$(dirname "$0")/../.env"
 [[ -f "$ENV_FILE" ]] && source "$ENV_FILE"
 
 SKILL_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 
-echo "🚀 Base Trading Agent Setup"
-echo "=========================="
-echo
+# Detect headless mode (--headless flag or HEADLESS=1 env)
+HEADLESS=0
+for arg in "$@"; do
+    [[ "$arg" == "--headless" ]] && HEADLESS=1
+done
+[[ "${HEADLESS_MODE:-}" == "1" ]] && HEADLESS=1
 
-# Auto-install jq if missing
-if ! command -v jq >/dev/null 2>&1; then
-    echo "📦 jq not found. Installing..."
-    if command -v apt-get >/dev/null 2>&1; then
-        sudo apt-get update -qq && sudo apt-get install -y -qq jq
-    elif command -v brew >/dev/null 2>&1; then
-        brew install jq
-    elif command -v yum >/dev/null 2>&1; then
-        sudo yum install -y jq
-    elif command -v apk >/dev/null 2>&1; then
-        apk add --no-cache jq
+prompt() {
+    local var="$1" msg="$2" default="${3:-}"
+    if [[ $HEADLESS -eq 1 ]]; then
+        # In headless mode, use env var or default
+        eval "REPLY=\${$var:-$default}"
     else
-        echo "❌ Could not auto-install jq. Install manually."
-        exit 1
+        read -p "$msg" REPLY
+        REPLY="${REPLY:-$default}"
+    fi
+    echo "$REPLY"
+}
+
+echo "🚀 Spirit Agent Setup" >&2
+echo "=====================" >&2
+[[ $HEADLESS -eq 1 ]] && echo "Running in headless mode" >&2
+echo >&2
+
+# --- Auto-install deps ---
+if ! command -v jq >/dev/null 2>&1; then
+    echo "📦 Installing jq..." >&2
+    if command -v apt-get >/dev/null 2>&1; then
+        sudo apt-get update -qq && sudo apt-get install -y -qq jq 2>/dev/null
+    elif command -v brew >/dev/null 2>&1; then
+        brew install jq 2>/dev/null
     fi
 fi
+command -v jq >/dev/null 2>&1 && echo "✅ jq" >&2 || { echo "❌ jq required" >&2; exit 1; }
 
-echo "✅ jq found"
-
-# Auto-install Foundry (cast) if missing
 if ! command -v cast >/dev/null 2>&1; then
-    echo "📦 Foundry (cast) not found. Installing..."
-    curl -L https://foundry.paradigm.xyz | bash
+    echo "📦 Installing Foundry..." >&2
+    curl -sL https://foundry.paradigm.xyz | bash 2>/dev/null
     export PATH="$HOME/.foundry/bin:$PATH"
-    foundryup
-    if ! command -v cast >/dev/null 2>&1; then
-        echo "❌ Foundry installation failed."
+    foundryup 2>/dev/null
+fi
+command -v cast >/dev/null 2>&1 && echo "✅ foundry" >&2 || { echo "❌ foundry required" >&2; exit 1; }
+
+# --- 1. Platform API key ---
+echo >&2
+PLATFORM_API_URL="${PLATFORM_API_URL:-https://api.spiritagent.fun}"
+PLATFORM_API_KEY="${PLATFORM_API_KEY:-}"
+
+if [[ -z "$PLATFORM_API_KEY" ]]; then
+    if [[ $HEADLESS -eq 1 ]]; then
+        echo "❌ PLATFORM_API_KEY is required in headless mode" >&2
         exit 1
     fi
+    read -p "🔑 Platform API key: " PLATFORM_API_KEY
 fi
+echo "✅ API key set" >&2
 
-echo "✅ Foundry found"
-
-# 1. Platform API setup
-echo
-echo "🌐 Platform API Setup"
-echo "---------------------"
-echo
-PLATFORM_API_URL="${PLATFORM_API_URL:-https://api.agent-arena.xyz}"
-echo "Platform API URL: $PLATFORM_API_URL"
-
-read -p "Platform API key (or press Enter to skip): " PLATFORM_API_KEY
-
-# 3. Twitter/X setup via OpenClaw browser
-echo
-echo "🐦 Twitter/X Setup (Optional)"
-echo "-----------------------------"
-echo
-read -p "Connect Twitter account? (y/N): " connect_twitter
-TWITTER_USERNAME=""
-
-if [[ "$connect_twitter" =~ ^[Yy] ]]; then
-    read -p "Twitter @username: " TWITTER_USERNAME
-    echo
-    echo "Opening X/Twitter login in OpenClaw browser..."
-    echo "Please log in manually — your session will persist."
-    "$SKILL_DIR/scripts/twitter-login.sh" && echo "✅ Twitter connected!" || {
-        echo "⚠️  Twitter login skipped. You can run ./scripts/twitter-login.sh later."
-    }
-fi
-
-# 4. Agent configuration
-echo
-echo "🤖 Agent Configuration"
-echo "----------------------"
-echo
-read -p "Agent ID/name: " AGENT_ID
-echo "Available strategies: default, degen"
-read -p "Strategy (default/degen) [default]: " STRATEGY
+# --- 2. Agent config ---
+AGENT_ID="${AGENT_ID:-}"
 STRATEGY="${STRATEGY:-default}"
 
-# 5. Write .env file
-echo
-echo "Writing configuration..."
-cat > "$ENV_FILE" << EOF
-# Base Trading Agent Configuration
-GLUEX_API_KEY="VtQwnrPU75cMIFFquIbZpiIyxFL0siqf"
+if [[ -z "$AGENT_ID" ]]; then
+    if [[ $HEADLESS -eq 1 ]]; then
+        AGENT_ID="agent-$(head -c 4 /dev/urandom | xxd -p)"
+        echo "Auto-generated agent ID: $AGENT_ID" >&2
+    else
+        read -p "🤖 Agent name: " AGENT_ID
+        echo "Strategies: default (conservative), degen (aggressive)" >&2
+        read -p "Strategy [default]: " STRATEGY
+        STRATEGY="${STRATEGY:-default}"
+    fi
+fi
+echo "✅ Agent: $AGENT_ID ($STRATEGY)" >&2
 
-# Platform
+# --- 3. Write .env ---
+echo >&2
+echo "Writing .env..." >&2
+cat > "$ENV_FILE" << EOF
+# Spirit Agent Configuration
 PLATFORM_API_URL="$PLATFORM_API_URL"
 PLATFORM_API_KEY="$PLATFORM_API_KEY"
-
-# Agent
 AGENT_ID="$AGENT_ID"
 STRATEGY="$STRATEGY"
+GLUEX_API_KEY="VtQwnrPU75cMIFFquIbZpiIyxFL0siqf"
+BASE_RPC="https://mainnet.base.org"
 
-# Twitter (optional — session managed by OpenClaw browser)
-TWITTER_USERNAME="$TWITTER_USERNAME"
+# Set by platform on registration
+BASE_WALLET_ADDRESS=""
 
-# Paths
+# Twitter (optional)
+TWITTER_USERNAME=""
+TWITTER_AUTH_TOKEN=""
+TWITTER_CT0=""
+
 export PATH="\$HOME/.foundry/bin:\$PATH"
 EOF
+echo "✅ .env saved" >&2
 
-echo "✅ Configuration saved to $ENV_FILE"
+# --- 4. Register with platform ---
+echo >&2
+echo "🔗 Registering with platform..." >&2
+source "$ENV_FILE"
 
-# 6. Register with platform
-echo
-echo "🔗 Platform Registration"
-echo "------------------------"
-echo
-if [[ -n "${PLATFORM_API_KEY:-}" ]]; then
-    echo "Registering agent with platform..."
-    "$SKILL_DIR/scripts/register.sh" || echo "⚠️  Registration failed (platform may not be available yet)"
+REG_RESPONSE=$(curl -s -w "\n%{http_code}" \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer $PLATFORM_API_KEY" \
+    -d "$(jq -n --arg id "$AGENT_ID" --arg strategy "$STRATEGY" '{agentId: $id, chain: "base", strategy: $strategy}')" \
+    "$PLATFORM_API_URL/api/agents/register" 2>/dev/null || echo -e "\n000")
+
+HTTP_CODE=$(echo "$REG_RESPONSE" | tail -1)
+REG_BODY=$(echo "$REG_RESPONSE" | sed '$d')
+
+if [[ "$HTTP_CODE" == "200" || "$HTTP_CODE" == "201" ]]; then
+    WALLET=$(echo "$REG_BODY" | jq -r '.data.wallet // .wallet // .wallet_address // empty' 2>/dev/null)
+    if [[ -n "$WALLET" ]]; then
+        sed -i.bak "s/^BASE_WALLET_ADDRESS=\"\"/BASE_WALLET_ADDRESS=\"$WALLET\"/" "$ENV_FILE"
+        rm -f "$ENV_FILE.bak"
+        echo "✅ Registered! Wallet: $WALLET" >&2
+    else
+        echo "✅ Registered (no wallet in response)" >&2
+    fi
 else
-    echo "⚠️  Skipping platform registration (no API key)"
+    echo "⚠️  Registration failed (HTTP $HTTP_CODE) — will retry on first heartbeat" >&2
 fi
 
-# 7. Setup cron job
-echo
-echo "⏰ Cron Job Setup"
-echo "----------------"
-echo
-read -p "Setup automatic trading loop? (y/N): " setup_cron
-if [[ "$setup_cron" =~ ^[Yy] ]]; then
-    read -p "Interval in minutes [5]: " INTERVAL
-    INTERVAL="${INTERVAL:-5}"
-    
-    CRON_COMMAND="cd $SKILL_DIR && ./scripts/agent-loop.sh"
-    CRON_LINE="*/$INTERVAL * * * * $CRON_COMMAND"
-    
-    echo "Adding cron job: $CRON_LINE"
-    (crontab -l 2>/dev/null || echo "") | grep -v "agent-loop.sh" | { cat; echo "$CRON_LINE"; } | crontab -
-    echo "✅ Cron job added"
-else
-    echo "⚠️  Skipping cron setup. Run manually with: $SKILL_DIR/scripts/agent-loop.sh"
+# --- 5. Twitter (interactive only) ---
+if [[ $HEADLESS -eq 0 ]]; then
+    echo >&2
+    read -p "🐦 Connect Twitter? (y/N): " connect_twitter
+    if [[ "$connect_twitter" =~ ^[Yy] ]]; then
+        read -p "Twitter @username: " TW_USER
+        if [[ -n "$TW_USER" ]]; then
+            sed -i.bak "s/^TWITTER_USERNAME=\"\"/TWITTER_USERNAME=\"$TW_USER\"/" "$ENV_FILE"
+            rm -f "$ENV_FILE.bak"
+        fi
+        "$SKILL_DIR/scripts/twitter-login.sh" 2>&1 || echo "⚠️  Twitter skipped. Run ./scripts/twitter-login.sh later." >&2
+    fi
 fi
 
-echo
-echo "🎉 Setup Complete!"
-echo "=================="
-echo
-echo "Your agent is configured with:"
-echo "  Strategy: $STRATEGY"
-echo "  Agent ID: $AGENT_ID"
-echo "  Wallet: managed by Spirit (server wallet)"
-echo
-echo "Next steps:"
-echo "  1. Fund your wallet with Base ETH"
-echo "  2. Test with: $SKILL_DIR/scripts/balance.sh"
-echo "  3. Start trading with: $SKILL_DIR/scripts/agent-loop.sh"
-echo
+# --- 6. Done ---
+echo >&2
+echo "🎉 Setup complete!" >&2
+echo >&2
+echo "Your agent '$AGENT_ID' is ready." >&2
+echo "Wallet: ${WALLET:-pending registration}" >&2
+echo "Strategy: $STRATEGY" >&2
+echo >&2
+echo "Now send this to your OpenClaw agent:" >&2
+echo >&2
+echo "  I just installed spirit-agent. Start the trading agent loop with strategy '$STRATEGY'." >&2
+echo >&2

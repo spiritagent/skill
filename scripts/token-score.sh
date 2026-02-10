@@ -8,96 +8,189 @@ TOKEN_ADDRESS="$1"
 STRATEGY="${2:-$STRATEGY}"
 
 if [[ -z "$TOKEN_ADDRESS" ]]; then
-    echo "Usage: $0 <token_address> [strategy]"
+    echo "Usage: $0 <token_address> [strategy]" >&2
     exit 1
 fi
 
-echo "📊 Scoring token: $TOKEN_ADDRESS"
+echo "📊 Scoring token: $TOKEN_ADDRESS" >&2
 
 # Load strategy config
 STRATEGY_FILE="$(dirname "$0")/../strategies/${STRATEGY}.json"
 if [[ ! -f "$STRATEGY_FILE" ]]; then
-    echo "❌ Strategy not found: $STRATEGY"
+    echo "❌ Strategy not found: $STRATEGY" >&2
     exit 1
 fi
 
 STRATEGY_CONFIG=$(cat "$STRATEGY_FILE")
 
-# Get token info
-TOKEN_INFO=$(curl -s "https://base.blockscout.com/api/v2/tokens/$TOKEN_ADDRESS" || echo '{"error":"failed"}')
+# Get token data from DexScreener
+TOKEN_INFO=$(curl -s "https://api.dexscreener.com/tokens/v1/base/$TOKEN_ADDRESS" || echo '{"error":"failed"}')
 
 if echo "$TOKEN_INFO" | jq -e '.error' >/dev/null 2>&1; then
-    echo "❌ Failed to fetch token info"
-    exit 1
+    echo "❌ Failed to fetch token info from DexScreener" >&2
+    echo '{
+        "address": "'$TOKEN_ADDRESS'",
+        "symbol": "UNKNOWN",
+        "name": "Unknown Token",
+        "score": 0,
+        "breakdown": {
+            "liquidity": 0,
+            "volume": 0,
+            "price_action": 0,
+            "txn_activity": 0
+        },
+        "metrics": {
+            "liquidity_usd": 0,
+            "volume_24h_usd": 0,
+            "price_change_24h": 0,
+            "txns_24h": 0
+        },
+        "meets_criteria": false,
+        "recommendation": "AVOID",
+        "error": "API_FAILED"
+    }'
+    exit 0
 fi
 
-# Extract strategy thresholds
-MIN_LIQUIDITY=$(echo "$STRATEGY_CONFIG" | jq -r '.minLiquidityUSD')
-MIN_HOLDERS=$(echo "$STRATEGY_CONFIG" | jq -r '.minHolders')
+# Check if we have pairs data
+if ! echo "$TOKEN_INFO" | jq -e '.pairs' >/dev/null 2>&1 || [ "$(echo "$TOKEN_INFO" | jq '.pairs | length')" = "0" ]; then
+    echo "❌ No trading pairs found for token" >&2
+    echo '{
+        "address": "'$TOKEN_ADDRESS'",
+        "symbol": "UNKNOWN", 
+        "name": "Unknown Token",
+        "score": 0,
+        "breakdown": {
+            "liquidity": 0,
+            "volume": 0,
+            "price_action": 0,
+            "txn_activity": 0
+        },
+        "metrics": {
+            "liquidity_usd": 0,
+            "volume_24h_usd": 0,
+            "price_change_24h": 0,
+            "txns_24h": 0
+        },
+        "meets_criteria": false,
+        "recommendation": "AVOID",
+        "error": "NO_PAIRS"
+    }'
+    exit 0
+fi
 
-# Calculate score
-SCORE=$(echo "$TOKEN_INFO $STRATEGY_CONFIG" | jq -r '
-.[0] as $token | .[1] as $strategy |
+# Get the best pair (highest liquidity) for Base chain
+BEST_PAIR=$(echo "$TOKEN_INFO" | jq '.pairs | map(select(.chainId == "base")) | sort_by(.liquidity.usd) | reverse | .[0]')
 
-# Extract metrics
-($token.circulating_market_cap // "0" | tonumber) as $market_cap |
-($token.holder_count // 0) as $holders |
-($token.volume_24h // "0" | tonumber) as $volume |
+if [ "$BEST_PAIR" = "null" ]; then
+    echo "❌ No Base chain pairs found" >&2
+    echo '{
+        "address": "'$TOKEN_ADDRESS'",
+        "symbol": "UNKNOWN",
+        "name": "Unknown Token", 
+        "score": 0,
+        "breakdown": {
+            "liquidity": 0,
+            "volume": 0,
+            "price_action": 0,
+            "txn_activity": 0
+        },
+        "metrics": {
+            "liquidity_usd": 0,
+            "volume_24h_usd": 0,
+            "price_change_24h": 0,
+            "txns_24h": 0
+        },
+        "meets_criteria": false,
+        "recommendation": "AVOID",
+        "error": "NO_BASE_PAIRS"
+    }'
+    exit 0
+fi
+
+# Calculate score using DexScreener data
+SCORE=$(jq -n \
+    --argjson pair "$BEST_PAIR" \
+    --argjson strategy "$STRATEGY_CONFIG" \
+    '
+# Extract metrics from best pair
+($pair.liquidity.usd // 0) as $liquidity |
+($pair.volume.h24 // 0) as $volume_24h |
+($pair.priceChange.h24 // 0) as $price_change_24h |
+(($pair.txns.h24.buys // 0) + ($pair.txns.h24.sells // 0)) as $txns_24h |
+($pair.fdv // 0) as $market_cap |
 ($strategy.minLiquidityUSD | tonumber) as $min_liq |
-($strategy.minHolders | tonumber) as $min_holders |
 
 # Calculate individual scores (0-100)
-(if $market_cap >= $min_liq then 
-    if $market_cap >= ($min_liq * 10) then 100
-    else ($market_cap / $min_liq) * 10 end
+
+# Liquidity score (40% weight)
+(if $liquidity >= $min_liq then 
+    if $liquidity >= ($min_liq * 10) then 100
+    else (($liquidity / $min_liq) * 10) | if . > 100 then 100 else . end
+    end
  else 0 end) as $liquidity_score |
 
-(if $holders >= $min_holders then
-    if $holders >= ($min_holders * 10) then 100  
-    else ($holders / $min_holders) * 10 end
- else 0 end) as $holder_score |
-
-# Volume score (24h volume vs market cap ratio)
-(if $market_cap > 0 then
-    (($volume / $market_cap) * 100) | if . > 100 then 100 else . end
+# Volume score (30% weight) - 24h volume vs liquidity ratio
+(if $liquidity > 0 then
+    (($volume_24h / $liquidity) * 20) | if . > 100 then 100 else . end
  else 0 end) as $volume_score |
 
-# Age bonus (newer tokens get slight bonus for meme potential)
-(now - ($token.updated_at // now | strptime("%Y-%m-%dT%H:%M:%S.%fZ") | mktime)) as $age_seconds |
-($age_seconds / 86400) as $age_days |
-(if $age_days < 1 then 20
- elif $age_days < 7 then 10
- elif $age_days < 30 then 5
- else 0 end) as $age_bonus |
+# Price action score (20% weight) - positive momentum
+(if $price_change_24h > 0 then
+    if $price_change_24h > 50 then 100
+    else ($price_change_24h * 2) | if . > 100 then 100 else . end
+    end
+ elif $price_change_24h > -10 then 20
+ else 0 end) as $price_score |
 
-# Combined score
-(($liquidity_score * 0.4) + ($holder_score * 0.3) + ($volume_score * 0.2) + ($age_bonus * 0.1)) as $total_score |
+# Transaction activity score (10% weight)
+(if $txns_24h > 100 then 100
+ elif $txns_24h > 10 then ($txns_24h / 100) * 100
+ else ($txns_24h * 5) | if . > 100 then 100 else . end 
+ end) as $txn_score |
+
+# Combined weighted score  
+(($liquidity_score * 0.4) + ($volume_score * 0.3) + ($price_score * 0.2) + ($txn_score * 0.1)) as $total_score |
+
+# Age consideration (newer pairs might be riskier)
+(if ($pair.pairCreatedAt // null) then
+    ((now - ($pair.pairCreatedAt / 1000)) / 86400) as $age_days |
+    if $age_days < 1 then ($total_score * 0.8)  # 20% penalty for very new
+    elif $age_days < 7 then ($total_score * 0.9)  # 10% penalty for new  
+    else $total_score
+    end
+ else $total_score
+ end) as $final_score |
 
 {
-    address: $token.address,
-    symbol: $token.symbol,
-    name: $token.name,
-    score: ($total_score | floor),
+    address: ($pair.baseToken.address // "'$TOKEN_ADDRESS'"),
+    symbol: ($pair.baseToken.symbol // "UNKNOWN"),
+    name: ($pair.baseToken.name // "Unknown Token"),
+    score: ($final_score | floor),
     breakdown: {
         liquidity: ($liquidity_score | floor),
-        holders: ($holder_score | floor),  
         volume: ($volume_score | floor),
-        age_bonus: ($age_bonus | floor)
+        price_action: ($price_score | floor),
+        txn_activity: ($txn_score | floor)
     },
     metrics: {
-        market_cap_usd: $market_cap,
-        holder_count: $holders,
-        volume_24h_usd: $volume,
-        age_days: ($age_days | floor)
+        liquidity_usd: $liquidity,
+        volume_24h_usd: $volume_24h,
+        price_change_24h: $price_change_24h,
+        txns_24h: $txns_24h,
+        market_cap: $market_cap,
+        age_days: (if ($pair.pairCreatedAt // null) then ((now - ($pair.pairCreatedAt / 1000)) / 86400) | floor else null end)
     },
-    meets_criteria: ($market_cap >= $min_liq and $holders >= $min_holders),
+    meets_criteria: ($liquidity >= $min_liq and $txns_24h >= 10),
     recommendation: (
-        if $total_score >= 80 then "STRONG_BUY"
-        elif $total_score >= 60 then "BUY"  
-        elif $total_score >= 40 then "WATCH"
-        elif $total_score >= 20 then "WEAK"
+        if $final_score >= 80 then "STRONG_BUY"
+        elif $final_score >= 60 then "BUY"  
+        elif $final_score >= 40 then "WATCH"
+        elif $final_score >= 20 then "WEAK"
         else "AVOID"
-    )
+    ),
+    pair_address: $pair.pairAddress,
+    dex: $pair.dexId
 }'
 )
 
