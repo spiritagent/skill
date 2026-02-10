@@ -189,7 +189,9 @@ async def main():
             if not query:
                 print(json.dumps({'error': 'Query required'}))
                 sys.exit(1)
-            tweets = await client.search_tweet(query, 'Latest', count=10)
+            count = int(args[-1]) if len(args) > 1 and args[-1].isdigit() else 20
+            query = ' '.join(a for a in args if not a.isdigit() or a != args[-1])
+            tweets = await client.search_tweet(query, 'Latest', count=count)
             result = {
                 'ok': True,
                 'tweets': [{
@@ -203,7 +205,8 @@ async def main():
             }
         
         elif action == 'timeline':
-            tweets = await client.get_timeline()
+            count = int(args[0]) if args else 50
+            tweets = await client.get_timeline(count=count)
             result = {
                 'ok': True,
                 'tweets': [{
@@ -213,7 +216,7 @@ async def main():
                     'created_at': str(t.created_at) if t.created_at else None,
                     'likes': t.favorite_count,
                     'retweets': t.retweet_count,
-                } for t in tweets[:20]]
+                } for t in tweets[:count]]
             }
         
         elif action == 'user':
@@ -239,7 +242,8 @@ async def main():
                 print(json.dumps({'error': 'Username required'}))
                 sys.exit(1)
             user = await client.get_user_by_screen_name(args[0])
-            tweets = await client.get_user_tweets(user.id, 'Tweets', count=10)
+            count = int(args[1]) if len(args) > 1 else 20
+            tweets = await client.get_user_tweets(user.id, 'Tweets', count=count)
             result = {
                 'ok': True,
                 'tweets': [{
