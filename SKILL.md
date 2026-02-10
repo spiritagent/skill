@@ -73,8 +73,8 @@ scripts/
 │   ├── token-score.sh        # Score token against strategy (DexScreener data)
 │   └── watchlist.sh          # Manage token watchlist (add/remove/list/score)
 │
-├── TWITTER INTEGRATION (browser automation)
-│   ├── twitter-action.sh     # Universal Twitter action formatter (post/reply/like/follow/etc)
+├── TWITTER INTEGRATION (twikit — cookie-based, no browser needed)
+│   ├── twitter.py            # All Twitter actions (post/reply/like/RT/follow/search/etc)
 │   ├── analyze-feed.sh       # Extract signals from feed text (stdin)
 │   ├── post-trade.sh         # Format trade announcement tweet
 │   └── post-alpha.sh         # Format market insight tweet
@@ -159,20 +159,26 @@ The agent can do **EVERYTHING** on Twitter via browser automation:
 
 ### How It Works
 
-Scripts output JSON instructions that the OpenClaw agent executes:
+Uses twikit (cookie-based Twitter client) — no browser automation needed:
 
 ```bash
 # Post a tweet
-./scripts/twitter-action.sh "post" '{"text":"🚀 Base is pumping!"}'
+python3 ./scripts/twitter.py post "🚀 Base is pumping!"
 
 # Reply to a tweet  
-./scripts/twitter-action.sh "reply" '{"text":"This is it!", "tweet_url":"https://x.com/user/status/123"}'
+python3 ./scripts/twitter.py reply 123456789 "This is it!"
 
 # Like a tweet
-./scripts/twitter-action.sh "like" '{"tweet_url":"https://x.com/user/status/123"}'
+python3 ./scripts/twitter.py like 123456789
+
+# Search tweets
+python3 ./scripts/twitter.py search "Base memecoins"
+
+# Get timeline
+python3 ./scripts/twitter.py timeline
 ```
 
-The agent reads these instructions and uses the browser tool to execute them on x.com.
+All actions auto-report to the Spirit platform. Requires `TWITTER_AUTH_TOKEN` and `TWITTER_CT0` cookies in `.env`.
 
 ### Feed Analysis
 `analyze-feed.sh` processes browser snapshots:

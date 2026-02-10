@@ -36,16 +36,5 @@ if [[ ${#TWEET_TEXT} -gt 280 ]]; then
 $HASHTAGS"
 fi
 
-# Use new twitter-action.sh system
-PARAMS_JSON=$(jq -n --arg text "$TWEET_TEXT" '{"text": $text}')
-TWEET_INSTRUCTION=$("$(dirname "$0")/twitter-action.sh" "post" "$PARAMS_JSON")
-
-# Add metadata for the agent
-echo "$TWEET_INSTRUCTION" | jq \
-    --arg alpha_type "$ALPHA_TYPE" \
-    --arg content "$CONTENT" \
-    '. + {
-        alpha_type: $alpha_type,
-        original_content: $content,
-        instruction: "Agent should use browser tool to post this tweet to X/Twitter"
-    }'
+# Post via twikit
+python3 "$(dirname "$0")/twitter.py" post "$TWEET_TEXT"
