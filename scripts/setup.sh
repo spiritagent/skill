@@ -166,7 +166,7 @@ if [[ $HEADLESS -eq 0 ]]; then
             echo >&2
             echo "🤖 Activating my Spirit Agent! Pairing code: $API_KEY_PREFIX" >&2
             echo >&2
-            echo "@spiritdotfun" >&2
+            echo "@spiritdottown" >&2
             echo >&2
             echo "2. After posting, copy the tweet ID from the URL" >&2
             echo "   Example: https://x.com/$TW_USER/status/1234567890 → tweet ID is 1234567890" >&2

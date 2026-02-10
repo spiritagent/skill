@@ -23,7 +23,7 @@ if [[ -z "$X_USERNAME" ]] || [[ -z "$TWEET_ID" ]]; then
     echo ""
     echo "🤖 Activating my Spirit Agent! Pairing code: [YOUR_API_KEY_PREFIX]"
     echo ""
-    echo "@spiritdotfun"
+    echo "@spiritdottown"
     echo ""
     echo "3. Copy the tweet ID from the URL and run:"
     echo "   $0 @yourusername 1234567890"
