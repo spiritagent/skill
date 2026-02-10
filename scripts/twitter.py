@@ -115,10 +115,10 @@ async def main():
                 sys.exit(1)
             tweet_ref = args[0]
             text = ' '.join(args[1:])
-            # If just an ID, build the URL (twikit needs the URL for quote)
+            # twikit uses attachment_url for quote tweets
             if not tweet_ref.startswith('http'):
                 tweet_ref = f'https://x.com/i/status/{tweet_ref}'
-            tweet = await client.create_tweet(text, quote_tweet_id=args[0])
+            tweet = await client.create_tweet(text, attachment_url=tweet_ref)
             result = {'ok': True, 'tweet_id': tweet.id, 'quoted': args[0], 'text': text}
         
         elif action == 'like':
