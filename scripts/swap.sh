@@ -1,6 +1,6 @@
 #!/bin/bash
-# Usage: swap.sh <buy|sell> <token_address> <amount_in_wei>
-# Executes swap via platform (quote + execute in one call)
+# Usage: swap.sh <buy|sell> <token_address> <amount_in_wei> [slippage_pct]
+# slippage_pct: default 1 (= 1%). Set higher for volatile memecoins.
 set -euo pipefail
 
 source "$(dirname "$0")/../.env" 2>/dev/null || true
@@ -8,6 +8,7 @@ source "$(dirname "$0")/../.env" 2>/dev/null || true
 ACTION="$1"
 TOKEN="$2"
 AMOUNT="$3"
+SLIPPAGE="${4:-1}"
 
 if [[ -z "${PLATFORM_API_URL:-}" || -z "${PLATFORM_API_KEY:-}" ]]; then
     echo "⚠️  Platform not configured, cannot swap"
@@ -15,17 +16,19 @@ if [[ -z "${PLATFORM_API_URL:-}" || -z "${PLATFORM_API_KEY:-}" ]]; then
 fi
 
 if [ -z "$ACTION" ] || [ -z "$TOKEN" ] || [ -z "$AMOUNT" ]; then
-    echo "Usage: $0 <buy|sell> <token_address> <amount_in_wei>"
+    echo "Usage: $0 <buy|sell> <token_address> <amount_in_wei> [slippage_pct]"
+    echo "  slippage_pct: default 1 (1%). Use 5-10 for memecoins."
     exit 1
 fi
 
-echo "💱 Executing swap via platform..." >&2
+echo "💱 Executing swap via platform (slippage: ${SLIPPAGE}%)..." >&2
 
 PAYLOAD=$(jq -n \
     --arg tokenAddress "$TOKEN" \
     --arg amount "$AMOUNT" \
     --arg action "$ACTION" \
-    '{tokenAddress: $tokenAddress, amount: $amount, action: $action}')
+    --argjson slippage "$SLIPPAGE" \
+    '{tokenAddress: $tokenAddress, amount: $amount, action: $action, slippage: $slippage}')
 
 RESPONSE=$(curl -s -w "\n%{http_code}" \
     -X POST \
@@ -41,10 +44,14 @@ if [[ "$HTTP_CODE" == "200" || "$HTTP_CODE" == "201" ]]; then
     echo "✅ Swap executed!" >&2
     echo "$BODY" | jq '.data | {
         hash: .hash,
+        inputToken: .inputToken,
+        outputToken: .outputToken,
         inputAmount: .inputAmount,
         outputAmount: .outputAmount,
+        minOutputAmount: .minOutputAmount,
         inputUSD: .inputAmountUSD,
-        outputUSD: .outputAmountUSD
+        outputUSD: .outputAmountUSD,
+        slippage: .slippage
     }'
 else
     echo "❌ Swap failed (HTTP $HTTP_CODE)" >&2
