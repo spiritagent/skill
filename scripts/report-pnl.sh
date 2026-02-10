@@ -4,47 +4,23 @@ set -euo pipefail
 # Source env
 source "$(dirname "$0")/../.env"
 
-PNL_DATA="${1:-}"
+echo "📈 Calculating and logging PnL locally..."
 
-if [[ -z "${PLATFORM_API_URL:-}" || -z "${PLATFORM_API_KEY:-}" || -z "${AGENT_ID:-}" ]]; then
-    echo "⚠️  Platform not configured, skipping PnL report"
-    exit 0
-fi
+# Note: There's no dedicated PnL endpoint on the platform.
+# PnL is calculated from trades. This script just logs locally.
 
-echo "📈 Reporting PnL to platform..."
+# Get PnL data
+PNL_DATA=$("$(dirname "$0")/pnl.sh" 2>/dev/null || echo '{}')
 
-# Get PnL data if not provided
-if [[ -z "$PNL_DATA" ]]; then
-    PNL_DATA=$("$(dirname "$0")/pnl.sh" 2>/dev/null || echo '{}')
-fi
+# Save to local log with timestamp
+TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+LOG_FILE="$(dirname "$0")/../data/pnl-log.jsonl"
 
-# Build PnL payload
-PNL_PAYLOAD=$(echo "$PNL_DATA" | jq \
-    --arg agentId "$AGENT_ID" \
-    --arg timestamp "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-    '{
-        agentId: $agentId,
-        timestamp: $timestamp,
-        pnl: .
-    }'
-)
+# Ensure data directory exists
+mkdir -p "$(dirname "$0")/../data"
 
-# Send PnL snapshot
-RESPONSE=$(curl -s -w "%{http_code}" \
-    -H "Content-Type: application/json" \
-    -H "Authorization: Bearer $PLATFORM_API_KEY" \
-    -d "$PNL_PAYLOAD" \
-    "$PLATFORM_API_URL/api/agents/pnl" 2>/dev/null || echo "000")
+# Log PnL data
+echo "$PNL_DATA" | jq --arg timestamp "$TIMESTAMP" '. + {timestamp: $timestamp}' >> "$LOG_FILE"
 
-HTTP_CODE="${RESPONSE: -3}"
-RESPONSE_BODY="${RESPONSE%???}"
-
-if [[ "$HTTP_CODE" == "200" || "$HTTP_CODE" == "201" ]]; then
-    echo "✅ PnL reported successfully"
-    if [[ -n "$RESPONSE_BODY" ]]; then
-        echo "$RESPONSE_BODY" | jq . 2>/dev/null || echo "$RESPONSE_BODY"
-    fi
-else
-    echo "⚠️  PnL report failed (HTTP $HTTP_CODE)"
-    echo "$RESPONSE_BODY"
-fi
+echo "✅ PnL logged to $LOG_FILE"
+echo "$PNL_DATA" | jq .

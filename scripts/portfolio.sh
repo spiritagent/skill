@@ -6,12 +6,31 @@ set -euo pipefail
 source "$(dirname "$0")/../.env" 2>/dev/null || true
 
 ADDRESS="${1:-$BASE_WALLET_ADDRESS}"
-BLOCKSCOUT="https://base.blockscout.com/api/v2"
 
 if [ -z "$ADDRESS" ]; then
     echo "Error: No wallet address specified" >&2
     exit 1
 fi
+
+# Try platform endpoint first if configured
+if [[ -n "${PLATFORM_API_URL:-}" && -n "${PLATFORM_API_KEY:-}" ]]; then
+    RESPONSE=$(curl -s -w "%{http_code}" \
+        -H "Authorization: Bearer $PLATFORM_API_KEY" \
+        "$PLATFORM_API_URL/api/v1/wallet/balance?address=$ADDRESS" 2>/dev/null || echo "000")
+    
+    HTTP_CODE="${RESPONSE: -3}"
+    RESPONSE_BODY="${RESPONSE%???}"
+    
+    if [[ "$HTTP_CODE" == "200" ]]; then
+        echo "$RESPONSE_BODY" | jq '.data'
+        exit 0
+    else
+        echo "⚠️  Platform balance endpoint failed, falling back to direct Blockscout..." >&2
+    fi
+fi
+
+# Fallback to direct Blockscout call
+BLOCKSCOUT="https://base.blockscout.com/api/v2"
 
 # Get ETH balance
 eth_data=$(curl -s "$BLOCKSCOUT/addresses/$ADDRESS" || { echo "Failed to fetch ETH balance" >&2; exit 1; })

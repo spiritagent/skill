@@ -4,46 +4,18 @@ set -euo pipefail
 # Source env
 source "$(dirname "$0")/../.env"
 
-if [[ -z "${PLATFORM_API_URL:-}" || -z "${PLATFORM_API_KEY:-}" || -z "${AGENT_ID:-}" ]]; then
+if [[ -z "${PLATFORM_API_URL:-}" || -z "${PLATFORM_API_KEY:-}" ]]; then
     echo "⚠️  Platform not configured, skipping heartbeat"
     exit 0
 fi
 
 echo "💓 Sending heartbeat to platform..."
 
-# Get current portfolio and PnL
-PORTFOLIO_DATA=$("$(dirname "$0")/portfolio.sh" "$BASE_WALLET_ADDRESS" 2>/dev/null || echo '{}')
-PNL_DATA=$("$(dirname "$0")/pnl.sh" 2>/dev/null || echo '{}')
-
-# Build status payload
-STATUS_PAYLOAD=$(jq -n \
-    --arg agentId "$AGENT_ID" \
-    --arg status "active" \
-    --argjson portfolio "$PORTFOLIO_DATA" \
-    --argjson pnl "$PNL_DATA" \
-    --arg timestamp "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-    --arg version "1.0.0" \
-    '{
-        agentId: $agentId,
-        status: $status,
-        portfolio: $portfolio,
-        pnl: $pnl,
-        timestamp: $timestamp,
-        version: $version,
-        health: {
-            last_trade: null,
-            errors: [],
-            uptime_hours: 0
-        }
-    }'
-)
-
-# Send heartbeat
+# Send heartbeat - no body required, just auth header
 RESPONSE=$(curl -s -w "%{http_code}" \
-    -H "Content-Type: application/json" \
+    -X POST \
     -H "Authorization: Bearer $PLATFORM_API_KEY" \
-    -d "$STATUS_PAYLOAD" \
-    "$PLATFORM_API_URL/api/agents/heartbeat" 2>/dev/null || echo "000")
+    "$PLATFORM_API_URL/api/v1/agents/heartbeat" 2>/dev/null || echo "000")
 
 HTTP_CODE="${RESPONSE: -3}"
 RESPONSE_BODY="${RESPONSE%???}"

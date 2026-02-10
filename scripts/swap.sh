@@ -1,6 +1,5 @@
 #!/bin/bash
-# Usage: swap.sh <buy|sell> <token_address> <amount_in_wei> [slippage_bps]
-# slippage_bps: default 100 (1%)
+# Usage: swap.sh <buy|sell> <token_address> <amount_in_wei> [user_address]
 set -euo pipefail
 
 source "$(dirname "$0")/../.env" 2>/dev/null || true
@@ -8,80 +7,93 @@ source "$(dirname "$0")/../.env" 2>/dev/null || true
 ACTION="$1"
 TOKEN="$2"
 AMOUNT="$3"
-SLIPPAGE="${4:-100}"
-ADDRESS="${BASE_WALLET_ADDRESS}"
-RPC="${BASE_RPC:-https://mainnet.base.org}"
-API_KEY="${GLUEX_API_KEY:-VtQwnrPU75cMIFFquIbZpiIyxFL0siqf}"
-ETH="0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
-PID="866a61811189692e8eccae5d2759724a812fa6f8703ebffe90c29dc1f886bbc1"
+USER_ADDRESS="${4:-${BASE_WALLET_ADDRESS}}"
 
-if [ "$ACTION" = "buy" ]; then
-  INPUT="$ETH"
-  OUTPUT="$TOKEN"
-else
-  INPUT="$TOKEN"
-  OUTPUT="$ETH"
+if [[ -z "${PLATFORM_API_URL:-}" || -z "${PLATFORM_API_KEY:-}" ]]; then
+    echo "⚠️  Platform not configured, cannot swap"
+    exit 1
 fi
 
-# Step 1: Get quote with calldata
-echo "Getting quote..."
-QUOTE=$(curl -s -X POST "https://router.gluex.xyz/v1/quote" \
-  -H "Content-Type: application/json" \
-  -H "x-api-key: $API_KEY" \
-  -H "origin: https://dapp.gluex.xyz" \
-  -H "referer: https://dapp.gluex.xyz/" \
-  -d "{
-    \"inputToken\": \"$INPUT\",
-    \"outputToken\": \"$OUTPUT\",
-    \"inputAmount\": \"$AMOUNT\",
-    \"userAddress\": \"$ADDRESS\",
-    \"outputReceiver\": \"$ADDRESS\",
-    \"chainID\": \"base\",
-    \"uniquePID\": \"$PID\",
-    \"isPermit2\": false,
-    \"computeStable\": true,
-    \"computeEstimate\": true,
-    \"modulesFilter\": [],
-    \"modulesDisabled\": [],
-    \"activateSurplusFee\": false,
-    \"surgeProtection\": false
-  }")
+if [ -z "$ACTION" ] || [ -z "$TOKEN" ] || [ -z "$AMOUNT" ]; then
+    echo "Usage: $0 <buy|sell> <token_address> <amount_in_wei> [user_address]"
+    exit 1
+fi
 
-echo "$QUOTE" | jq '{inputUSD: .result.inputAmountUSD, outputUSD: .result.outputAmountUSD, route: .result.liquidityModules}'
+echo "💱 Getting swap quote via platform..."
 
-ROUTER=$(echo "$QUOTE" | jq -r '.result.router')
-CALLDATA=$(echo "$QUOTE" | jq -r '.result.calldata')
-VALUE=$(echo "$QUOTE" | jq -r '.result.value // "0"')
+# Step 1: Get swap quote with calldata
+QUOTE_PAYLOAD=$(jq -n \
+    --arg tokenAddress "$TOKEN" \
+    --arg amount "$AMOUNT" \
+    --arg action "$ACTION" \
+    --arg userAddress "$USER_ADDRESS" \
+    '{
+        tokenAddress: $tokenAddress,
+        amount: $amount,
+        action: $action,
+        userAddress: $userAddress
+    }'
+)
+
+QUOTE_RESPONSE=$(curl -s -w "%{http_code}" \
+    -X POST \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer $PLATFORM_API_KEY" \
+    -d "$QUOTE_PAYLOAD" \
+    "$PLATFORM_API_URL/api/v1/swap/quote" 2>/dev/null || echo "000")
+
+QUOTE_HTTP_CODE="${QUOTE_RESPONSE: -3}"
+QUOTE_BODY="${QUOTE_RESPONSE%???}"
+
+if [[ "$QUOTE_HTTP_CODE" != "200" ]]; then
+    echo "❌ Quote failed (HTTP $QUOTE_HTTP_CODE)"
+    echo "$QUOTE_BODY"
+    exit 1
+fi
+
+QUOTE_DATA=$(echo "$QUOTE_BODY" | jq '.data')
+echo "$QUOTE_DATA" | jq '{inputUSD: .inputAmountUSD, outputUSD: .outputAmountUSD, route: .route}'
+
+# Extract transaction data
+TO=$(echo "$QUOTE_DATA" | jq -r '.to')
+VALUE=$(echo "$QUOTE_DATA" | jq -r '.value // "0"')
+CALLDATA=$(echo "$QUOTE_DATA" | jq -r '.data')
 
 if [ -z "$CALLDATA" ] || [ "$CALLDATA" = "null" ]; then
-  echo "ERROR: No calldata returned from quote"
-  exit 1
+    echo "ERROR: No transaction data returned from quote"
+    exit 1
 fi
 
-# Step 2: If selling a token, check and set approval first
-if [ "$ACTION" = "sell" ]; then
-  echo "Checking token approval..."
-  ALLOWANCE=$(cast call "$TOKEN" "allowance(address,address)(uint256)" "$ADDRESS" "$ROUTER" --rpc-url "$RPC" 2>/dev/null || echo "0")
+# Step 2: Execute swap via platform tx endpoint
+echo "🔄 Executing swap via server wallet..."
+TX_PAYLOAD=$(jq -n \
+    --arg to "$TO" \
+    --arg value "$VALUE" \
+    --arg data "$CALLDATA" \
+    '{
+        to: $to,
+        value: $value,
+        data: $data
+    }'
+)
 
-  if [ "$(echo "$ALLOWANCE" | tr -d '[:space:]')" = "0" ] || [ "$ALLOWANCE" -lt "$AMOUNT" ] 2>/dev/null; then
-    echo "Approving token spend via server wallet..."
-    APPROVE_DATA=$(cast calldata "approve(address,uint256)" "$ROUTER" "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
-    APPROVE_RESULT=$(curl -s -X POST "${PLATFORM_API_URL}/api/v1/tx/send" \
-      -H "Content-Type: application/json" \
-      -H "Authorization: Bearer ${PLATFORM_API_KEY}" \
-      -d "{\"to\": \"$TOKEN\", \"data\": \"$APPROVE_DATA\"}")
-    echo "$APPROVE_RESULT" | jq '{hash: .data.hash}'
-    echo "Approval done."
-  fi
+TX_RESPONSE=$(curl -s -w "%{http_code}" \
+    -X POST \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer $PLATFORM_API_KEY" \
+    -d "$TX_PAYLOAD" \
+    "$PLATFORM_API_URL/api/v1/tx/send" 2>/dev/null || echo "000")
+
+TX_HTTP_CODE="${TX_RESPONSE: -3}"
+TX_BODY="${TX_RESPONSE%???}"
+
+if [[ "$TX_HTTP_CODE" == "200" || "$TX_HTTP_CODE" == "201" ]]; then
+    echo "✅ Swap transaction sent successfully"
+    echo "$TX_BODY" | jq '{hash: .data.hash}'
+else
+    echo "❌ Swap transaction failed (HTTP $TX_HTTP_CODE)"
+    echo "$TX_BODY"
+    exit 1
 fi
 
-# Step 3: Send the swap transaction via server wallet
-echo "Sending swap transaction..."
-TX_RESULT=$(curl -s -X POST "${PLATFORM_API_URL}/api/v1/tx/send" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer ${PLATFORM_API_KEY}" \
-  -d "{\"to\": \"$ROUTER\", \"value\": \"$VALUE\", \"data\": \"$CALLDATA\"}")
-
-echo "$TX_RESULT" | jq '{hash: .data.hash}'
-
-echo "Swap complete!"
+echo "🎉 Swap complete!"

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Usage: price.sh <token_address> <amount_in_wei> [direction]
+# Usage: price.sh <token_address> <amount_in_wei> [direction] [user_address]
 # direction: buy (ETH→token, default) or sell (token→ETH)
 set -euo pipefail
 
@@ -8,44 +8,62 @@ source "$(dirname "$0")/../.env" 2>/dev/null || true
 TOKEN="$1"
 AMOUNT="$2"
 DIRECTION="${3:-buy}"
-ADDRESS="${BASE_WALLET_ADDRESS}"
-API_KEY="${GLUEX_API_KEY:-VtQwnrPU75cMIFFquIbZpiIyxFL0siqf}"
-ETH="0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
-PID="866a61811189692e8eccae5d2759724a812fa6f8703ebffe90c29dc1f886bbc1"
+USER_ADDRESS="${4:-${BASE_WALLET_ADDRESS}}"
 
-if [ "$DIRECTION" = "buy" ]; then
-  INPUT="$ETH"
-  OUTPUT="$TOKEN"
-else
-  INPUT="$TOKEN"
-  OUTPUT="$ETH"
+if [[ -z "${PLATFORM_API_URL:-}" || -z "${PLATFORM_API_KEY:-}" ]]; then
+    echo "⚠️  Platform not configured, cannot get price"
+    exit 1
 fi
 
-curl -s -X POST "https://router.gluex.xyz/v1/price" \
-  -H "Content-Type: application/json" \
-  -H "x-api-key: $API_KEY" \
-  -H "origin: https://dapp.gluex.xyz" \
-  -H "referer: https://dapp.gluex.xyz/" \
-  -d "{
-    \"inputToken\": \"$INPUT\",
-    \"outputToken\": \"$OUTPUT\",
-    \"inputAmount\": \"$AMOUNT\",
-    \"userAddress\": \"$ADDRESS\",
-    \"outputReceiver\": \"$ADDRESS\",
-    \"chainID\": \"base\",
-    \"uniquePID\": \"$PID\",
-    \"isPermit2\": false,
-    \"computeStable\": true,
-    \"computeEstimate\": true,
-    \"modulesFilter\": [],
-    \"modulesDisabled\": [],
-    \"activateSurplusFee\": false
-  }" | jq '{
-    inputAmount: .result.inputAmount,
-    outputAmount: .result.outputAmount,
-    inputUSD: .result.inputAmountUSD,
-    outputUSD: .result.outputAmountUSD,
-    minOutput: .result.minOutputAmount,
-    route: .result.liquidityModules,
-    router: .result.router
-  }'
+if [ -z "$TOKEN" ] || [ -z "$AMOUNT" ]; then
+    echo "Usage: $0 <token_address> <amount_in_wei> [direction] [user_address]"
+    exit 1
+fi
+
+# Map direction to action
+if [ "$DIRECTION" = "sell" ]; then
+    ACTION="sell"
+else
+    ACTION="buy"
+fi
+
+# Build price request payload
+PRICE_PAYLOAD=$(jq -n \
+    --arg tokenAddress "$TOKEN" \
+    --arg amount "$AMOUNT" \
+    --arg action "$ACTION" \
+    --arg userAddress "$USER_ADDRESS" \
+    '{
+        tokenAddress: $tokenAddress,
+        amount: $amount,
+        action: $action,
+        userAddress: $userAddress
+    }'
+)
+
+# Get price from platform
+RESPONSE=$(curl -s -w "%{http_code}" \
+    -X POST \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer $PLATFORM_API_KEY" \
+    -d "$PRICE_PAYLOAD" \
+    "$PLATFORM_API_URL/api/v1/swap/price" 2>/dev/null || echo "000")
+
+HTTP_CODE="${RESPONSE: -3}"
+RESPONSE_BODY="${RESPONSE%???}"
+
+if [[ "$HTTP_CODE" == "200" ]]; then
+    echo "$RESPONSE_BODY" | jq '.data | {
+        inputAmount: .inputAmount,
+        outputAmount: .outputAmount,
+        inputUSD: .inputAmountUSD,
+        outputUSD: .outputAmountUSD,
+        minOutput: .minOutputAmount,
+        route: .route,
+        priceImpact: .priceImpact
+    }'
+else
+    echo "❌ Price request failed (HTTP $HTTP_CODE)"
+    echo "$RESPONSE_BODY"
+    exit 1
+fi

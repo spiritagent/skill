@@ -106,34 +106,50 @@ export PATH="\$HOME/.foundry/bin:\$PATH"
 EOF
 echo "✅ .env saved" >&2
 
-# --- 4. Register with platform ---
+# --- 4. Get API key from onboard/token ---
 echo >&2
-echo "🔗 Registering with platform..." >&2
+echo "🔑 Getting agent API key..." >&2
 source "$ENV_FILE"
 
-REG_RESPONSE=$(curl -s -w "\n%{http_code}" \
+ONBOARD_RESPONSE=$(curl -s -w "\n%{http_code}" \
+    -X POST \
     -H "Content-Type: application/json" \
-    -H "Authorization: Bearer $PLATFORM_API_KEY" \
-    -d "$(jq -n --arg id "$AGENT_ID" --arg strategy "$STRATEGY" '{agentId: $id, chain: "base", strategy: $strategy}')" \
-    "$PLATFORM_API_URL/api/agents/register" 2>/dev/null || echo -e "\n000")
+    -d "$(jq -n --arg name "$AGENT_ID" --arg strategy "$STRATEGY" '{name: $name, metadata: {strategy: $strategy}}')" \
+    "$PLATFORM_API_URL/api/v1/onboard/token" 2>/dev/null || echo -e "\n000")
 
-HTTP_CODE=$(echo "$REG_RESPONSE" | tail -1)
-REG_BODY=$(echo "$REG_RESPONSE" | sed '$d')
+HTTP_CODE=$(echo "$ONBOARD_RESPONSE" | tail -1)
+ONBOARD_BODY=$(echo "$ONBOARD_RESPONSE" | sed '$d')
 
 if [[ "$HTTP_CODE" == "200" || "$HTTP_CODE" == "201" ]]; then
-    WALLET=$(echo "$REG_BODY" | jq -r '.data.wallet // .wallet // .wallet_address // empty' 2>/dev/null)
-    if [[ -n "$WALLET" ]]; then
-        sed -i.bak "s/^BASE_WALLET_ADDRESS=\"\"/BASE_WALLET_ADDRESS=\"$WALLET\"/" "$ENV_FILE"
+    AGENT_API_KEY=$(echo "$ONBOARD_BODY" | jq -r '.data.apiKey // empty' 2>/dev/null)
+    WALLET=$(echo "$ONBOARD_BODY" | jq -r '.data.walletAddress // empty' 2>/dev/null)
+    
+    if [[ -n "$AGENT_API_KEY" ]]; then
+        # Update .env with the actual agent API key
+        sed -i.bak "s/^PLATFORM_API_KEY=\".*\"/PLATFORM_API_KEY=\"$AGENT_API_KEY\"/" "$ENV_FILE"
+        
+        if [[ -n "$WALLET" ]]; then
+            sed -i.bak "s/^BASE_WALLET_ADDRESS=\"\"/BASE_WALLET_ADDRESS=\"$WALLET\"/" "$ENV_FILE"
+            echo "✅ Onboarded! Wallet: $WALLET" >&2
+        else
+            echo "✅ Onboarded!" >&2
+        fi
         rm -f "$ENV_FILE.bak"
-        echo "✅ Registered! Wallet: $WALLET" >&2
+        
+        # Extract API key prefix for Twitter pairing
+        API_KEY_PREFIX="${AGENT_API_KEY:0:16}"
+        echo "   API Key Prefix: $API_KEY_PREFIX" >&2
     else
-        echo "✅ Registered (no wallet in response)" >&2
+        echo "❌ Onboard failed - no API key returned" >&2
+        exit 1
     fi
 else
-    echo "⚠️  Registration failed (HTTP $HTTP_CODE) — will retry on first heartbeat" >&2
+    echo "❌ Onboard failed (HTTP $HTTP_CODE)" >&2
+    echo "$ONBOARD_BODY" >&2
+    exit 1
 fi
 
-# --- 5. Twitter (interactive only) ---
+# --- 5. Twitter pairing (interactive only) ---
 if [[ $HEADLESS -eq 0 ]]; then
     echo >&2
     read -p "🐦 Connect Twitter? (y/N): " connect_twitter
@@ -142,8 +158,23 @@ if [[ $HEADLESS -eq 0 ]]; then
         if [[ -n "$TW_USER" ]]; then
             sed -i.bak "s/^TWITTER_USERNAME=\"\"/TWITTER_USERNAME=\"$TW_USER\"/" "$ENV_FILE"
             rm -f "$ENV_FILE.bak"
+            
+            echo >&2
+            echo "📱 Twitter Pairing Instructions:" >&2
+            echo "=================================" >&2
+            echo "1. Post this tweet from your account (@$TW_USER):" >&2
+            echo >&2
+            echo "🤖 Activating my Spirit Agent! Pairing code: $API_KEY_PREFIX" >&2
+            echo >&2
+            echo "@spiritdotfun" >&2
+            echo >&2
+            echo "2. After posting, copy the tweet ID from the URL" >&2
+            echo "   Example: https://x.com/$TW_USER/status/1234567890 → tweet ID is 1234567890" >&2
+            echo >&2
+            echo "3. Then run: ./scripts/register.sh @$TW_USER <tweet_id>" >&2
+            echo >&2
+            read -p "Press Enter to continue..."
         fi
-        "$SKILL_DIR/scripts/twitter-login.sh" 2>&1 || echo "⚠️  Twitter skipped. Run ./scripts/twitter-login.sh later." >&2
     fi
 fi
 
