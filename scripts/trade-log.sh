@@ -5,6 +5,7 @@ set -euo pipefail
 source "$(dirname "$0")/../.env"
 
 TRADES_FILE="$(dirname "$0")/../data/trades.jsonl"
+mkdir -p "$(dirname "$0")/../data"
 
 # Parse arguments
 ACTION="$1"

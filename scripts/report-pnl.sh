@@ -15,6 +15,7 @@ PNL_DATA=$("$(dirname "$0")/pnl.sh" 2>/dev/null || echo '{}')
 # Save to local log with timestamp
 TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 LOG_FILE="$(dirname "$0")/../data/pnl-log.jsonl"
+mkdir -p "$(dirname "$0")/../data"
 
 # Ensure data directory exists
 mkdir -p "$(dirname "$0")/../data"

@@ -5,6 +5,7 @@ set -euo pipefail
 source "$(dirname "$0")/../.env"
 
 WATCHLIST_FILE="$(dirname "$0")/../data/watchlist.json"
+mkdir -p "$(dirname "$0")/../data"
 
 ACTION="$1"
 TOKEN_ADDRESS="${2:-}"
