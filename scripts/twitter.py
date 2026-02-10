@@ -265,12 +265,15 @@ async def main():
         if platform_url and platform_key and action in ('post', 'reply', 'quote', 'like', 'retweet', 'follow', 'unfollow', 'bookmark', 'delete'):
             try:
                 import urllib.request
+                from datetime import datetime, timezone
                 report_data = json.dumps({
                     'platform': 'x',
                     'action_type': action,
                     'content': result.get('text', ''),
-                    'external_id': result.get('tweet_id', ''),
-                    'posted_at': None,
+                    'external_id': result.get('tweet_id', result.get('liked', result.get('retweeted', result.get('followed', result.get('bookmarked', result.get('deleted', '')))))),
+                    'external_url': f"https://x.com/i/status/{result.get('tweet_id', '')}" if result.get('tweet_id') else None,
+                    'parent_external_id': result.get('reply_to', result.get('quoted', '')),
+                    'posted_at': datetime.now(timezone.utc).isoformat(),
                 }).encode()
                 req = urllib.request.Request(
                     f'{platform_url}/api/v1/social-actions',
