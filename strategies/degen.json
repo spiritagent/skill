@@ -1,0 +1,14 @@
+{
+  "maxPositionSizeETH": "0.2",
+  "maxPositions": 10,
+  "slippageBps": 300,
+  "minLiquidityUSD": 5000,
+  "minHolders": 20,
+  "takeProfitPct": 100,
+  "stopLossPct": 50,
+  "autoTweet": true,
+  "tweetOnTrade": true,
+  "scanIntervalMin": 3,
+  "chains": ["base"],
+  "socials": ["twitter"]
+}
