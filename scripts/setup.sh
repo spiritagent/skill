@@ -97,10 +97,10 @@ BASE_RPC="https://mainnet.base.org"
 # Set by platform on registration
 BASE_WALLET_ADDRESS=""
 
-# Twitter (optional)
-TWITTER_USERNAME=""
+# Twitter (cookie auth — get from browser devtools or cookie extractor)
 TWITTER_AUTH_TOKEN=""
 TWITTER_CT0=""
+TWITTER_PROXY=""
 
 export PATH="\$HOME/.foundry/bin:\$PATH"
 EOF
