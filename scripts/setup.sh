@@ -141,52 +141,46 @@ else
     echo "⚠️  No valid API key — skipping platform verification" >&2
 fi
 
-# --- 5. Setup cron for agent loop ---
-echo >&2
-echo "⏰ IMPORTANT: Set up a cron job to run the agent loop every minute." >&2
-echo "   Use your OpenClaw cron system to create a recurring job:" >&2
-echo "   - Schedule: every 60 seconds" >&2
-echo "   - Type: isolated agentTurn" >&2
-echo "   - Message: Run the Spirit agent loop: execute ${SKILL_DIR}/scripts/agent-loop.sh and act on its output. Send the heartbeat first via ${SKILL_DIR}/scripts/heartbeat.sh" >&2
-echo "   - Delivery: none (silent)" >&2
-echo "   - Timeout: 120 seconds" >&2
-echo >&2
-
-# --- 6. Twitter pairing (interactive only) ---
-if [[ $HEADLESS -eq 0 ]]; then
-    echo >&2
-    read -p "🐦 Connect Twitter? (y/N): " connect_twitter
-    if [[ "$connect_twitter" =~ ^[Yy] ]]; then
-        read -p "Twitter @username: " TW_USER
-        if [[ -n "$TW_USER" ]]; then
-            sed -i.bak "s/^TWITTER_USERNAME=\"\"/TWITTER_USERNAME=\"$TW_USER\"/" "$ENV_FILE"
-            rm -f "$ENV_FILE.bak"
-            
-            echo >&2
-            echo "📱 Twitter Pairing Instructions:" >&2
-            echo "=================================" >&2
-            echo "1. Post a tweet containing your pairing code:" >&2
-            echo >&2
-            echo "   🤖 Activating my Spirit Agent! $PAIRING_CODE @spiritdottown" >&2
-            echo >&2
-            echo "2. Copy the tweet ID from the URL" >&2
-            echo "   Example: https://x.com/$TW_USER/status/1234567890 → 1234567890" >&2
-            echo >&2
-            echo "3. Run: ./scripts/register.sh @$TW_USER <tweet_id>" >&2
-            echo "   (tweet is auto-deleted after pairing)" >&2
-            echo >&2
-            read -p "Press Enter to continue..."
-        fi
-    fi
+# --- 5. Get pairing code ---
+PAIRING_CODE=""
+X_HANDLE=""
+if [[ "$HTTP_CODE" == "200" ]]; then
+    PAIRING_CODE=$(echo "$ME_BODY" | jq -r '.data.agent.pairing_code // empty' 2>/dev/null)
+    X_HANDLE=$(echo "$ME_BODY" | jq -r '.data.agent.x_handle // empty' 2>/dev/null)
 fi
 
-# --- 7. Done ---
+# --- 6. Done — output action plan for agent ---
 echo >&2
 echo "🎉 Setup complete!" >&2
 echo >&2
-echo "Your agent '$AGENT_ID' is ready." >&2
-echo "Wallet: ${WALLET:-pending registration}" >&2
-echo "Strategy: $STRATEGY" >&2
+echo "Agent: ${AGENT_NAME:-$AGENT_ID}" >&2
+echo "Wallet: ${WALLET:-pending}" >&2
+echo "X Handle: ${X_HANDLE:-not set}" >&2
+echo "Pairing Code: ${PAIRING_CODE:-none}" >&2
 echo >&2
-echo "ACTION REQUIRED: Create a cron job now for the agent loop (every 60s, isolated agentTurn, delivery none)." >&2
-echo >&2
+
+# Output structured action plan to stdout for the agent to parse
+cat << ACTIONS
+SPIRIT_SETUP_COMPLETE
+agent_id=${AGENT_ID}
+agent_name=${AGENT_NAME:-$AGENT_ID}
+wallet=${WALLET:-}
+x_handle=${X_HANDLE:-}
+pairing_code=${PAIRING_CODE:-}
+skill_dir=${SKILL_DIR}
+
+ACTION_REQUIRED:
+1. Create a cron job (every 60s, isolated agentTurn, delivery none, timeout 120s):
+   Message: "Run the Spirit agent loop: execute ${SKILL_DIR}/scripts/agent-loop.sh and act on its output. Send the heartbeat first via ${SKILL_DIR}/scripts/heartbeat.sh"
+
+2. Send a heartbeat now: execute ${SKILL_DIR}/scripts/heartbeat.sh
+
+3. If pairing_code is set and not empty, do Twitter pairing:
+   a. Open x.com in the browser
+   b. Tweet: "🤖 Activating my Spirit Agent! ${PAIRING_CODE:-} @spiritdottown"
+   c. Get the tweet ID from the posted tweet
+   d. Run: ${SKILL_DIR}/scripts/register.sh "${X_HANDLE:-}" <tweet_id>
+   e. The register script will auto-delete the pairing tweet after verification
+
+4. Read ${SKILL_DIR}/SKILL.md for full documentation
+ACTIONS
