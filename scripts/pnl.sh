@@ -1,92 +1,61 @@
 #!/bin/bash
+# Fetch PnL from platform (server-computed, trustless)
+# Usage: pnl.sh [agent_id]
 set -euo pipefail
 
-# Source env
 source "$(dirname "$0")/../.env"
 
-TRADES_FILE="$(dirname "$0")/../data/trades.jsonl"
-
-echo "📊 Calculating PnL..." >&2
-
-if [[ ! -f "$TRADES_FILE" || ! -s "$TRADES_FILE" ]]; then
-    echo "No trades found" >&2
-    echo '{"realized_pnl": 0, "unrealized_pnl": 0, "total_pnl": 0, "trades_count": 0}'
+if [[ -z "${PLATFORM_API_URL:-}" || -z "${PLATFORM_API_KEY:-}" ]]; then
+    echo "⚠️  Platform not configured" >&2
+    echo '{"realized_pnl": "0", "unrealized_pnl": "0", "total_pnl": "0", "trades_count": 0}'
     exit 0
 fi
 
-# Get current portfolio for unrealized PnL (now outputs JSON)
-PORTFOLIO_DATA=$("$(dirname "$0")/portfolio.sh" "$BASE_WALLET_ADDRESS" 2>/dev/null || echo '{"tokens":[]}')
+# Get agent info to find agent ID
+AGENT_RESPONSE=$(curl -s -w "\n%{http_code}" \
+    -H "Authorization: Bearer $PLATFORM_API_KEY" \
+    "$PLATFORM_API_URL/api/v1/agents/me" 2>/dev/null || echo -e "\n000")
 
-# Calculate realized PnL from trades
-REALIZED_PNL=$(cat "$TRADES_FILE" | jq -s '
-map(select(.pnl != null)) | 
-map(.pnl | tonumber) | 
-if length > 0 then add else 0 end
-')
+HTTP_CODE=$(echo "$AGENT_RESPONSE" | tail -1)
+AGENT_BODY=$(echo "$AGENT_RESPONSE" | sed '$d')
 
-# Calculate unrealized PnL for current positions
-UNREALIZED_DATA=$(jq -n \
-  --slurpfile trades "$TRADES_FILE" \
-  --argjson portfolio "$PORTFOLIO_DATA" \
-  '
-# Get net position for each token
-($trades | group_by(.token) | map({
-    token: .[0].token,
-    symbol: .[0].symbol,
-    net_amount: (map(
-        if .action == "buy" then (.amountOut | tonumber)
-        else -(.amountIn | tonumber) end
-    ) | add // 0),
-    total_cost: (map(
-        if .action == "buy" then (.amountInUSD | tonumber)
-        else -(.amountOutUSD | tonumber) end
-    ) | add // 0)
-})) as $positions |
+if [[ "$HTTP_CODE" != "200" ]]; then
+    echo "❌ Failed to fetch agent info" >&2
+    echo '{"realized_pnl": "0", "unrealized_pnl": "0", "total_pnl": "0", "trades_count": 0}'
+    exit 0
+fi
 
-# Calculate unrealized PnL for positions with current holdings
-$positions | map(
-    . as $pos |
-    # Find current holding
-    ($portfolio.tokens[]? | select(.token_address == $pos.token)) as $holding |
-    if $holding and $pos.net_amount > 0 then
-        # Calculate unrealized PnL
-        (($holding.value_usd // 0 | tonumber) - $pos.total_cost)
-    else
-        0
-    end
-) | add // 0
-')
+AGENT_ID=$(echo "$AGENT_BODY" | jq -r '.data.agent.id // empty')
 
-TOTAL_PNL=$(jq -n --argjson realized "$REALIZED_PNL" --argjson unrealized "$UNREALIZED_DATA" '$realized + $unrealized')
+if [[ -z "$AGENT_ID" ]]; then
+    echo "❌ No agent ID found" >&2
+    echo '{"realized_pnl": "0", "unrealized_pnl": "0", "total_pnl": "0", "trades_count": 0}'
+    exit 0
+fi
 
-# Count total trades
-TRADES_COUNT=$(cat "$TRADES_FILE" | wc -l)
+# Fetch portfolio with server-computed PnL
+PORTFOLIO_RESPONSE=$(curl -s -w "\n%{http_code}" \
+    "$PLATFORM_API_URL/api/v1/agents/$AGENT_ID/portfolio" 2>/dev/null || echo -e "\n000")
 
-# Get trade statistics
-STATS=$(cat "$TRADES_FILE" | jq -s '
-{
-    total_volume_usd: (map(.amountInUSD | tonumber) | add // 0),
-    winning_trades: (map(select(.pnl and (.pnl | tonumber) > 0)) | length),
-    losing_trades: (map(select(.pnl and (.pnl | tonumber) < 0)) | length),
-    best_trade: (map(select(.pnl) | .pnl | tonumber) | max // 0),
-    worst_trade: (map(select(.pnl) | .pnl | tonumber) | min // 0),
-    avg_trade_size: (if length > 0 then (map(.amountInUSD | tonumber) | add / length) else 0 end)
-}
-')
+P_HTTP_CODE=$(echo "$PORTFOLIO_RESPONSE" | tail -1)
+P_BODY=$(echo "$PORTFOLIO_RESPONSE" | sed '$d')
 
-# Combine results
-jq -n \
-    --argjson realized "$REALIZED_PNL" \
-    --argjson unrealized "$UNREALIZED_DATA" \
-    --argjson total "$TOTAL_PNL" \
-    --argjson trades_count "$TRADES_COUNT" \
-    --argjson stats "$STATS" \
-    --arg timestamp "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-    '{
-        realized_pnl: $realized,
-        unrealized_pnl: $unrealized,  
-        total_pnl: $total,
-        trades_count: $trades_count,
-        statistics: $stats,
-        timestamp: $timestamp
+if [[ "$P_HTTP_CODE" == "200" ]]; then
+    echo "$P_BODY" | jq '.data | {
+        realized_pnl: .realized_pnl_usd,
+        unrealized_pnl: .unrealized_pnl_usd,
+        total_pnl: .total_pnl_usd,
+        trades_count: .total_trades,
+        pnl_updated_at: .pnl_updated_at,
+        positions: [.positions[]? | {
+            token: .token_address,
+            symbol: .symbol,
+            amount: .amount,
+            cost_basis: .cost_basis_usd,
+            realized_pnl: .realized_pnl_usd
+        }]
     }'
+else
+    echo "❌ Failed to fetch portfolio (HTTP $P_HTTP_CODE)" >&2
+    echo '{"realized_pnl": "0", "unrealized_pnl": "0", "total_pnl": "0", "trades_count": 0}'
+fi
