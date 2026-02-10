@@ -106,51 +106,33 @@ export PATH="\$HOME/.foundry/bin:\$PATH"
 EOF
 echo "✅ .env saved" >&2
 
-# --- 4. Get API key from onboard/token ---
+# --- 4. Verify API key with platform ---
 echo >&2
-echo "🔑 Getting agent API key..." >&2
 source "$ENV_FILE"
 
-ONBOARD_RESPONSE=$(curl -s -w "\n%{http_code}" \
-    -X POST \
-    -H "Content-Type: application/json" \
-    -d "$(jq -n --arg name "$AGENT_ID" --arg strategy "$STRATEGY" '{name: $name, metadata: {strategy: $strategy}}')" \
-    "$PLATFORM_API_URL/api/v1/onboard/token" 2>/dev/null || echo -e "\n000")
-
-HTTP_CODE=$(echo "$ONBOARD_RESPONSE" | tail -1)
-ONBOARD_BODY=$(echo "$ONBOARD_RESPONSE" | sed '$d')
-
-if [[ "$HTTP_CODE" == "200" || "$HTTP_CODE" == "201" ]]; then
-    AGENT_API_KEY=$(echo "$ONBOARD_BODY" | jq -r '.data.apiKey // empty' 2>/dev/null)
-    WALLET=$(echo "$ONBOARD_BODY" | jq -r '.data.walletAddress // empty' 2>/dev/null)
+if [[ "$PLATFORM_API_KEY" == spirit_sk_* ]]; then
+    echo "🔑 API key provided, verifying with platform..." >&2
     
-    if [[ -n "$AGENT_API_KEY" ]]; then
-        # Update .env with the actual agent API key
-        sed -i.bak "s/^PLATFORM_API_KEY=\".*\"/PLATFORM_API_KEY=\"$AGENT_API_KEY\"/" "$ENV_FILE"
-        
+    ME_RESPONSE=$(curl -s -w "\n%{http_code}" \
+        -H "Authorization: Bearer $PLATFORM_API_KEY" \
+        "$PLATFORM_API_URL/api/v1/agents/me" 2>/dev/null || echo -e "\n000")
+    
+    HTTP_CODE=$(echo "$ME_RESPONSE" | tail -1)
+    ME_BODY=$(echo "$ME_RESPONSE" | sed '$d')
+    
+    if [[ "$HTTP_CODE" == "200" ]]; then
+        WALLET=$(echo "$ME_BODY" | jq -r '.data.walletAddress // empty' 2>/dev/null)
+        AGENT_NAME=$(echo "$ME_BODY" | jq -r '.data.name // empty' 2>/dev/null)
         if [[ -n "$WALLET" ]]; then
             sed -i.bak "s/^BASE_WALLET_ADDRESS=\"\"/BASE_WALLET_ADDRESS=\"$WALLET\"/" "$ENV_FILE"
-            echo "✅ Onboarded! Wallet: $WALLET" >&2
-        else
-            echo "✅ Onboarded!" >&2
+            rm -f "$ENV_FILE.bak"
         fi
-        rm -f "$ENV_FILE.bak"
-        
-        # Extract pairing code for Twitter verification
-        PAIRING_CODE=$(echo "$ONBOARD_BODY" | jq -r '.data.pairingCode // empty' 2>/dev/null)
-        if [[ -n "$PAIRING_CODE" ]]; then
-            echo "   Pairing Code: $PAIRING_CODE" >&2
-            # Save to .env for register.sh
-            echo "PAIRING_CODE=\"$PAIRING_CODE\"" >> "$ENV_FILE"
-        fi
+        echo "✅ Connected! Agent: ${AGENT_NAME:-$AGENT_ID} | Wallet: ${WALLET:-pending}" >&2
     else
-        echo "❌ Onboard failed - no API key returned" >&2
-        exit 1
+        echo "⚠️  Could not verify key (HTTP $HTTP_CODE) — continuing anyway" >&2
     fi
 else
-    echo "❌ Onboard failed (HTTP $HTTP_CODE)" >&2
-    echo "$ONBOARD_BODY" >&2
-    exit 1
+    echo "⚠️  No valid API key — skipping platform verification" >&2
 fi
 
 # --- 5. Twitter pairing (interactive only) ---
