@@ -121,11 +121,17 @@ if [[ "$PLATFORM_API_KEY" == spirit_sk_* ]]; then
     ME_BODY=$(echo "$ME_RESPONSE" | sed '$d')
     
     if [[ "$HTTP_CODE" == "200" ]]; then
-        WALLET=$(echo "$ME_BODY" | jq -r '.data.walletAddress // empty' 2>/dev/null)
-        AGENT_NAME=$(echo "$ME_BODY" | jq -r '.data.name // empty' 2>/dev/null)
+        WALLET=$(echo "$ME_BODY" | jq -r '.data.agent.wallet_address // empty' 2>/dev/null)
+        AGENT_NAME=$(echo "$ME_BODY" | jq -r '.data.agent.name // empty' 2>/dev/null)
+        AGENT_ID_FROM_API=$(echo "$ME_BODY" | jq -r '.data.agent.id // empty' 2>/dev/null)
         if [[ -n "$WALLET" ]]; then
             sed -i.bak "s/^BASE_WALLET_ADDRESS=\"\"/BASE_WALLET_ADDRESS=\"$WALLET\"/" "$ENV_FILE"
             rm -f "$ENV_FILE.bak"
+        fi
+        if [[ -n "$AGENT_ID_FROM_API" ]]; then
+            sed -i.bak "s/^AGENT_ID=\".*\"/AGENT_ID=\"$AGENT_ID_FROM_API\"/" "$ENV_FILE"
+            rm -f "$ENV_FILE.bak"
+            AGENT_ID="$AGENT_ID_FROM_API"
         fi
         echo "✅ Connected! Agent: ${AGENT_NAME:-$AGENT_ID} | Wallet: ${WALLET:-pending}" >&2
     else
@@ -135,7 +141,30 @@ else
     echo "⚠️  No valid API key — skipping platform verification" >&2
 fi
 
-# --- 5. Twitter pairing (interactive only) ---
+# --- 5. Setup HEARTBEAT.md for agent loop ---
+HEARTBEAT_FILE="${HOME}/.openclaw/workspace/HEARTBEAT.md"
+HEARTBEAT_ENTRY="- Run Spirit agent loop: execute ${SKILL_DIR}/scripts/agent-loop.sh and act on its output"
+
+if [[ -f "$HEARTBEAT_FILE" ]]; then
+    if ! grep -qF "spirit-agent" "$HEARTBEAT_FILE" 2>/dev/null && ! grep -qF "agent-loop.sh" "$HEARTBEAT_FILE" 2>/dev/null; then
+        echo "" >> "$HEARTBEAT_FILE"
+        echo "# Spirit Agent" >> "$HEARTBEAT_FILE"
+        echo "$HEARTBEAT_ENTRY" >> "$HEARTBEAT_FILE"
+        echo "✅ Added Spirit agent loop to HEARTBEAT.md" >&2
+    else
+        echo "✅ HEARTBEAT.md already has Spirit agent entry" >&2
+    fi
+else
+    cat > "$HEARTBEAT_FILE" << HEOF
+# HEARTBEAT.md
+
+# Spirit Agent
+$HEARTBEAT_ENTRY
+HEOF
+    echo "✅ Created HEARTBEAT.md with Spirit agent loop" >&2
+fi
+
+# --- 6. Twitter pairing (interactive only) ---
 if [[ $HEADLESS -eq 0 ]]; then
     echo >&2
     read -p "🐦 Connect Twitter? (y/N): " connect_twitter
@@ -163,7 +192,7 @@ if [[ $HEADLESS -eq 0 ]]; then
     fi
 fi
 
-# --- 6. Done ---
+# --- 7. Done ---
 echo >&2
 echo "🎉 Setup complete!" >&2
 echo >&2
