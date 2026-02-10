@@ -10,17 +10,17 @@ PARAMS_JSON="${2:-{}}"
 
 if [ -z "$ACTION" ]; then
     echo "Usage: twitter-action.sh <action> <params_json>" >&2
-    echo "Actions: post, reply, quote, like, retweet, follow, unfollow, bookmark" >&2
+    echo "Actions: post, reply, quote, like, retweet, follow, unfollow, bookmark, delete" >&2
     exit 1
 fi
 
 # Validate action
 case "$ACTION" in
-    post|reply|quote|like|retweet|follow|unfollow|bookmark)
+    post|reply|quote|like|retweet|follow|unfollow|bookmark|delete)
         ;;
     *)
         echo "❌ Invalid action: $ACTION" >&2
-        echo "Valid actions: post, reply, quote, like, retweet, follow, unfollow, bookmark" >&2
+        echo "Valid actions: post, reply, quote, like, retweet, follow, unfollow, bookmark, delete" >&2
         exit 1
         ;;
 esac
@@ -120,6 +120,29 @@ case "$ACTION" in
         ;;
     
     like|retweet|bookmark)
+        TWEET_ID=$(echo "$PARAMS_JSON" | jq -r '.tweet_id // ""')
+        TWEET_URL=$(echo "$PARAMS_JSON" | jq -r '.tweet_url // ""')
+        
+        if [ -z "$TWEET_ID" ] && [ -z "$TWEET_URL" ]; then
+            echo "❌ Missing required parameter: tweet_id or tweet_url" >&2
+            exit 1
+        fi
+        
+        OUTPUT=$(jq -n \
+            --arg action "$ACTION" \
+            --arg tweet_id "$TWEET_ID" \
+            --arg tweet_url "$TWEET_URL" \
+            --arg timestamp "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            '{
+                action: "twitter_action",
+                twitter_action: $action,
+                tweet_id: $tweet_id,
+                tweet_url: $tweet_url,
+                timestamp: $timestamp
+            }')
+        ;;
+    
+    delete)
         TWEET_ID=$(echo "$PARAMS_JSON" | jq -r '.tweet_id // ""')
         TWEET_URL=$(echo "$PARAMS_JSON" | jq -r '.tweet_url // ""')
         

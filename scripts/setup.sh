@@ -136,9 +136,13 @@ if [[ "$HTTP_CODE" == "200" || "$HTTP_CODE" == "201" ]]; then
         fi
         rm -f "$ENV_FILE.bak"
         
-        # Extract API key prefix for Twitter pairing
-        API_KEY_PREFIX="${AGENT_API_KEY:0:16}"
-        echo "   API Key Prefix: $API_KEY_PREFIX" >&2
+        # Extract pairing code for Twitter verification
+        PAIRING_CODE=$(echo "$ONBOARD_BODY" | jq -r '.data.pairingCode // empty' 2>/dev/null)
+        if [[ -n "$PAIRING_CODE" ]]; then
+            echo "   Pairing Code: $PAIRING_CODE" >&2
+            # Save to .env for register.sh
+            echo "PAIRING_CODE=\"$PAIRING_CODE\"" >> "$ENV_FILE"
+        fi
     else
         echo "❌ Onboard failed - no API key returned" >&2
         exit 1
@@ -162,16 +166,15 @@ if [[ $HEADLESS -eq 0 ]]; then
             echo >&2
             echo "📱 Twitter Pairing Instructions:" >&2
             echo "=================================" >&2
-            echo "1. Post this tweet from your account (@$TW_USER):" >&2
+            echo "1. Post a tweet containing your pairing code:" >&2
             echo >&2
-            echo "🤖 Activating my Spirit Agent! Pairing code: $API_KEY_PREFIX" >&2
+            echo "   🤖 Activating my Spirit Agent! $PAIRING_CODE @spiritdottown" >&2
             echo >&2
-            echo "@spiritdottown" >&2
+            echo "2. Copy the tweet ID from the URL" >&2
+            echo "   Example: https://x.com/$TW_USER/status/1234567890 → 1234567890" >&2
             echo >&2
-            echo "2. After posting, copy the tweet ID from the URL" >&2
-            echo "   Example: https://x.com/$TW_USER/status/1234567890 → tweet ID is 1234567890" >&2
-            echo >&2
-            echo "3. Then run: ./scripts/register.sh @$TW_USER <tweet_id>" >&2
+            echo "3. Run: ./scripts/register.sh @$TW_USER <tweet_id>" >&2
+            echo "   (tweet is auto-deleted after pairing)" >&2
             echo >&2
             read -p "Press Enter to continue..."
         fi
