@@ -294,13 +294,26 @@ async def main():
 
                 ext_id = result.get('tweet_id', result.get('liked', result.get('unliked', result.get('retweeted', result.get('unretweeted', result.get('followed', result.get('unfollowed', result.get('bookmarked', result.get('unbookmarked', result.get('deleted', ''))))))))))
 
+                # Build proper tweet URLs
+                parent_ext_id = result.get('reply_to', result.get('quoted', ''))
+                parent_url = f"https://x.com/{parent_author}/status/{parent_ext_id}" if parent_author and parent_ext_id else (f"https://x.com/i/status/{parent_ext_id}" if parent_ext_id else None)
+
+                # For own tweets, use x.com/i/status (redirects to correct user)
+                if action in ('follow', 'unfollow'):
+                    ext_url = f"https://x.com/intent/user?user_id={ext_id}" if ext_id else None
+                elif ext_id:
+                    ext_url = f"https://x.com/i/status/{ext_id}"
+                else:
+                    ext_url = None
+
                 report_data = json.dumps({
                     'platform': 'x',
                     'action_type': action,
                     'content': result.get('text', ''),
                     'external_id': ext_id,
-                    'external_url': f"https://x.com/i/status/{ext_id}" if ext_id and action != 'follow' and action != 'unfollow' else None,
-                    'parent_external_id': result.get('reply_to', result.get('quoted', '')),
+                    'external_url': ext_url,
+                    'parent_external_id': parent_ext_id,
+                    'parent_external_url': parent_url,
                     'parent_content': parent_content,
                     'parent_author': parent_author,
                     'parent_author_name': parent_author_name,
