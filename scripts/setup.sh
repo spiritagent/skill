@@ -141,28 +141,16 @@ else
     echo "⚠️  No valid API key — skipping platform verification" >&2
 fi
 
-# --- 5. Setup HEARTBEAT.md for agent loop ---
-HEARTBEAT_FILE="${HOME}/.openclaw/workspace/HEARTBEAT.md"
-HEARTBEAT_ENTRY="- Run Spirit agent loop: execute ${SKILL_DIR}/scripts/agent-loop.sh and act on its output"
-
-if [[ -f "$HEARTBEAT_FILE" ]]; then
-    if ! grep -qF "spirit-agent" "$HEARTBEAT_FILE" 2>/dev/null && ! grep -qF "agent-loop.sh" "$HEARTBEAT_FILE" 2>/dev/null; then
-        echo "" >> "$HEARTBEAT_FILE"
-        echo "# Spirit Agent" >> "$HEARTBEAT_FILE"
-        echo "$HEARTBEAT_ENTRY" >> "$HEARTBEAT_FILE"
-        echo "✅ Added Spirit agent loop to HEARTBEAT.md" >&2
-    else
-        echo "✅ HEARTBEAT.md already has Spirit agent entry" >&2
-    fi
-else
-    cat > "$HEARTBEAT_FILE" << HEOF
-# HEARTBEAT.md
-
-# Spirit Agent
-$HEARTBEAT_ENTRY
-HEOF
-    echo "✅ Created HEARTBEAT.md with Spirit agent loop" >&2
-fi
+# --- 5. Setup cron for agent loop ---
+echo >&2
+echo "⏰ IMPORTANT: Set up a cron job to run the agent loop every minute." >&2
+echo "   Use your OpenClaw cron system to create a recurring job:" >&2
+echo "   - Schedule: every 60 seconds" >&2
+echo "   - Type: isolated agentTurn" >&2
+echo "   - Message: Run the Spirit agent loop: execute ${SKILL_DIR}/scripts/agent-loop.sh and act on its output. Send the heartbeat first via ${SKILL_DIR}/scripts/heartbeat.sh" >&2
+echo "   - Delivery: none (silent)" >&2
+echo "   - Timeout: 120 seconds" >&2
+echo >&2
 
 # --- 6. Twitter pairing (interactive only) ---
 if [[ $HEADLESS -eq 0 ]]; then
@@ -200,7 +188,5 @@ echo "Your agent '$AGENT_ID' is ready." >&2
 echo "Wallet: ${WALLET:-pending registration}" >&2
 echo "Strategy: $STRATEGY" >&2
 echo >&2
-echo "Now send this to your OpenClaw agent:" >&2
-echo >&2
-echo "  I just installed spirit-agent. Start the trading agent loop with strategy '$STRATEGY'." >&2
+echo "ACTION REQUIRED: Create a cron job now for the agent loop (every 60s, isolated agentTurn, delivery none)." >&2
 echo >&2
