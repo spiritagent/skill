@@ -96,6 +96,7 @@ BASE_RPC="https://mainnet.base.org"
 
 # Set by platform on registration
 BASE_WALLET_ADDRESS=""
+X_HANDLE=""
 
 # Twitter (cookie auth — get from browser devtools or cookie extractor)
 TWITTER_AUTH_TOKEN=""
@@ -126,6 +127,11 @@ if [[ "$PLATFORM_API_KEY" == spirit_sk_* ]]; then
         AGENT_ID_FROM_API=$(echo "$ME_BODY" | jq -r '.data.agent.id // empty' 2>/dev/null)
         if [[ -n "$WALLET" ]]; then
             sed -i.bak "s/^BASE_WALLET_ADDRESS=\"\"/BASE_WALLET_ADDRESS=\"$WALLET\"/" "$ENV_FILE"
+            rm -f "$ENV_FILE.bak"
+        fi
+        X_HANDLE=$(echo "$ME_BODY" | jq -r '.data.agent.x_handle // empty' 2>/dev/null)
+        if [[ -n "$X_HANDLE" ]]; then
+            sed -i.bak "s/^X_HANDLE=\"\"/X_HANDLE=\"$X_HANDLE\"/" "$ENV_FILE"
             rm -f "$ENV_FILE.bak"
         fi
         if [[ -n "$AGENT_ID_FROM_API" ]]; then
