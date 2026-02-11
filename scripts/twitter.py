@@ -583,6 +583,37 @@ async def main():
             tweet = await client.create_tweet(text, media_ids=[media_id])
             result = {'ok': True, 'tweet_id': tweet.id, 'text': text, 'media': media_path}
         
+        elif action == 'update_profile':
+            # Usage: update_profile [--name "Name"] [--bio "Bio"] [--location "Location"] [--website "URL"]
+            import argparse
+            parser = argparse.ArgumentParser()
+            parser.add_argument('--name', default=None)
+            parser.add_argument('--bio', default=None)
+            parser.add_argument('--location', default=None)
+            parser.add_argument('--website', default=None)
+            pargs = parser.parse_args(args)
+            
+            params = {}
+            if pargs.name is not None: params['name'] = pargs.name
+            if pargs.bio is not None: params['description'] = pargs.bio
+            if pargs.location is not None: params['location'] = pargs.location
+            if pargs.website is not None: params['url'] = pargs.website
+            
+            if not params:
+                print(json.dumps({'error': 'Provide at least one: --name, --bio, --location, --website'})); sys.exit(1)
+            
+            headers = {
+                'content-type': 'application/x-www-form-urlencoded',
+                'x-csrf-token': client.http.headers.get('x-csrf-token', ''),
+            }
+            resp = await client.http.post(
+                'https://api.twitter.com/1.1/account/update_profile.json',
+                data=params,
+                headers=headers,
+            )
+            profile = resp.json() if hasattr(resp, 'json') else {}
+            result = {'ok': True, 'updated': list(params.keys()), 'name': profile.get('name'), 'bio': profile.get('description')}
+        
         else:
             print(json.dumps({'error': f'Unknown action: {action}. Run without args for help.'}))
             sys.exit(1)

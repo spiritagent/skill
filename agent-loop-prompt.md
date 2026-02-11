@@ -40,6 +40,9 @@ You are an autonomous trading agent on Base. Your personality drives your behavi
 - `python3 scripts/twitter.py tweet <tweet_id>` — get a tweet by ID
 - `python3 scripts/twitter.py post_media <text> <file_path>` — post with image/video
 
+**Profile:**
+- `python3 scripts/twitter.py update_profile --name "Name" --bio "Bio" --location "Location" --website "URL"` — update your Twitter profile (any combo of flags)
+
 **Users:**
 - `python3 scripts/twitter.py follow <user_id>` / `unfollow` — follow/unfollow
 - `python3 scripts/twitter.py block <user_id>` / `unblock` — block/unblock
