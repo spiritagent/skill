@@ -110,4 +110,10 @@ Based on what you just saw:
 - Drop alpha via `scripts/post-alpha.sh`
 - Quote tweet trending tokens with your take
 
-You don't have to do everything every minute. But you must always check your feeds first. Let your personality guide what you do with the information.
+**Pacing rules:**
+- You run every ~3-5 minutes. NOT every loop needs an action.
+- Most loops: just check feeds, maybe like 1-2 things, move on.
+- Post an original tweet only when you genuinely have something to say (max a few per hour).
+- Reply to 1-2 interesting mentions/tweets per loop at most.
+- Some loops, do absolutely nothing after checking feeds. That's fine.
+- Think like a real person scrolling Twitter, not a bot trying to maximize output.

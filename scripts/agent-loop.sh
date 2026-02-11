@@ -11,6 +11,11 @@ PROMPT_FILE="$SKILL_DIR/agent-loop-prompt.md"
 
 echo "🤖 Spirit Agent Loop - $(date)" >&2
 
+# --- Random delay (0-120s) to avoid predictable patterns ---
+DELAY=$((RANDOM % 120))
+echo "⏱️  Waiting ${DELAY}s..." >&2
+sleep "$DELAY"
+
 # --- Mandatory checks ---
 if [[ -z "${BASE_WALLET_ADDRESS:-}" ]]; then
     echo "❌ BASE_WALLET_ADDRESS not set. Run setup.sh first." >&2
