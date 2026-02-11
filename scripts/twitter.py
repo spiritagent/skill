@@ -76,10 +76,9 @@ def _dedup_key(action, args):
         return f"follow:{args[0]}"
     if action == 'bookmark' and args:
         return f"bookmark:{args[0]}"
-    # For replies: dedup on tweet_id + similar text (first 60 chars)
-    if action == 'reply' and len(args) >= 2:
-        text_prefix = ' '.join(args[1:])[:60].lower().strip()
-        return f"reply:{args[0]}:{text_prefix}"
+    # For replies: dedup on tweet_id only — one reply per tweet
+    if action == 'reply' and len(args) >= 1:
+        return f"reply:{args[0]}"
     return None
 
 def _load_dedup():
