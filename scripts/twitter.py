@@ -76,9 +76,7 @@ def _dedup_key(action, args):
         return f"follow:{args[0]}"
     if action == 'bookmark' and args:
         return f"bookmark:{args[0]}"
-    # For replies: dedup on tweet_id only — one reply per tweet
-    if action == 'reply' and len(args) >= 1:
-        return f"reply:{args[0]}"
+    # Replies are NOT deduped here — managed via reply log + agent awareness
     return None
 
 def _load_dedup():
@@ -110,6 +108,44 @@ def _is_duplicate(action, args):
     if key in cache:
         return True
     return False
+
+# --- Reply log ---
+REPLY_LOG_FILE = os.path.join(SCRIPT_DIR, '..', '.reply_log.json')
+REPLY_LOG_MAX_AGE = 3600 * 24  # 24 hours
+REPLY_LOG_MAX_ENTRIES = 200
+
+def _log_reply(tweet_id, text):
+    """Log a reply for agent awareness."""
+    import time
+    try:
+        log = []
+        if os.path.exists(REPLY_LOG_FILE):
+            with open(REPLY_LOG_FILE) as f:
+                log = json.load(f)
+        now = time.time()
+        # Clean old entries
+        log = [e for e in log if now - e.get('ts', 0) < REPLY_LOG_MAX_AGE]
+        log.append({'tweet_id': tweet_id, 'text': text[:200], 'ts': now})
+        # Cap size
+        if len(log) > REPLY_LOG_MAX_ENTRIES:
+            log = log[-REPLY_LOG_MAX_ENTRIES:]
+        with open(REPLY_LOG_FILE, 'w') as f:
+            json.dump(log, f)
+    except Exception:
+        pass
+
+def get_reply_log():
+    """Get recent replies for injection into agent loop."""
+    import time
+    try:
+        if not os.path.exists(REPLY_LOG_FILE):
+            return []
+        with open(REPLY_LOG_FILE) as f:
+            log = json.load(f)
+        now = time.time()
+        return [e for e in log if now - e.get('ts', 0) < REPLY_LOG_MAX_AGE]
+    except Exception:
+        return []
 
 def _record_action(action, args):
     """Record an action in the dedup cache."""
@@ -551,9 +587,11 @@ async def main():
             print(json.dumps({'error': f'Unknown action: {action}. Run without args for help.'}))
             sys.exit(1)
         
-        # Record in dedup cache + auto-report to platform
+        # Record in dedup cache + reply log + auto-report to platform
         if action in REPORTABLE_ACTIONS:
             _record_action(action, args)
+            if action == 'reply' and result.get('ok'):
+                _log_reply(result.get('reply_to', ''), result.get('text', ''))
             await report_to_platform(client, env, action, result, args)
         
         print(json.dumps(result))

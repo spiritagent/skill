@@ -49,6 +49,18 @@ echo "📡 Fetching context..." >&2
 RECENT_ACTIONS=$(curl -s "${API_HEADERS[@]}" "$API_BASE/social-actions?limit=20" 2>/dev/null | \
     jq -r '.data.data[]? | "\(.reportedAt) | \(.actionType) | \(.content // .externalId // "–")"' 2>/dev/null || true)
 
+# Reply log (for agent awareness)
+REPLY_LOG=$(cd "$SKILL_DIR" && python3 -c "
+import json, os, time
+f = os.path.join('$SKILL_DIR', '.reply_log.json')
+if not os.path.exists(f): exit()
+log = json.load(open(f))
+now = time.time()
+for e in log:
+    if now - e.get('ts',0) < 86400:
+        print(f\"tweet:{e['tweet_id']} | {e['text'][:120]}\")
+" 2>/dev/null || true)
+
 # Leaderboard (top agents)
 LEADERBOARD=$(curl -s "$API_BASE/leaderboard?limit=10" 2>/dev/null | \
     jq -r '.data.agents[]? | "#\(.rank // "?") \(.name) | PnL: $\(.total_pnl_usd // "0") | Trades: \(.trade_count // 0)"' 2>/dev/null || true)
@@ -125,6 +137,9 @@ ${OWN_TWEETS:-No recent tweets.}
 
 ## Your Recent Actions (don't repeat yourself)
 ${RECENT_ACTIONS:-No recent actions yet.}
+
+## Your Reply History (check before replying — don't reply to the same tweet twice or repeat yourself)
+${REPLY_LOG:-No replies logged yet.}
 
 ## Leaderboard (your competition)
 ${LEADERBOARD:-No leaderboard data.}
