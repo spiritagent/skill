@@ -61,6 +61,74 @@ COOKIES_FILE = os.path.join(SCRIPT_DIR, '..', 'twitter_cookies.json')
 # Actions that get auto-reported to platform
 REPORTABLE_ACTIONS = {'post', 'reply', 'quote', 'like', 'retweet', 'follow', 'unfollow', 'bookmark', 'delete', 'thread'}
 
+# --- Dedup system ---
+DEDUP_FILE = os.path.join(SCRIPT_DIR, '..', '.dedup_cache.json')
+DEDUP_MAX_AGE = 3600 * 6  # 6 hours
+DEDUP_MAX_ENTRIES = 500
+
+def _dedup_key(action, args):
+    """Generate a unique key for an action. Returns None if not dedup-able."""
+    if action == 'like' and args:
+        return f"like:{args[0]}"
+    if action == 'retweet' and args:
+        return f"retweet:{args[0]}"
+    if action == 'follow' and args:
+        return f"follow:{args[0]}"
+    if action == 'bookmark' and args:
+        return f"bookmark:{args[0]}"
+    # For replies: dedup on tweet_id + similar text (first 60 chars)
+    if action == 'reply' and len(args) >= 2:
+        text_prefix = ' '.join(args[1:])[:60].lower().strip()
+        return f"reply:{args[0]}:{text_prefix}"
+    return None
+
+def _load_dedup():
+    try:
+        if os.path.exists(DEDUP_FILE):
+            with open(DEDUP_FILE) as f:
+                return json.load(f)
+    except Exception:
+        pass
+    return {}
+
+def _save_dedup(cache):
+    try:
+        with open(DEDUP_FILE, 'w') as f:
+            json.dump(cache, f)
+    except Exception:
+        pass
+
+def _is_duplicate(action, args):
+    """Check if this action was already performed recently."""
+    key = _dedup_key(action, args)
+    if key is None:
+        return False
+    import time
+    cache = _load_dedup()
+    now = time.time()
+    # Clean old entries
+    cache = {k: v for k, v in cache.items() if now - v < DEDUP_MAX_AGE}
+    if key in cache:
+        return True
+    return False
+
+def _record_action(action, args):
+    """Record an action in the dedup cache."""
+    key = _dedup_key(action, args)
+    if key is None:
+        return
+    import time
+    cache = _load_dedup()
+    now = time.time()
+    # Clean old entries and cap size
+    cache = {k: v for k, v in cache.items() if now - v < DEDUP_MAX_AGE}
+    if len(cache) >= DEDUP_MAX_ENTRIES:
+        oldest = sorted(cache, key=cache.get)[:len(cache) - DEDUP_MAX_ENTRIES + 1]
+        for k in oldest:
+            del cache[k]
+    cache[key] = now
+    _save_dedup(cache)
+
 def load_env():
     env = {}
     if os.path.exists(ENV_FILE):
@@ -207,6 +275,12 @@ async def main():
     
     action = sys.argv[1]
     args = sys.argv[2:]
+    
+    # Dedup check — block duplicate write actions
+    if action in REPORTABLE_ACTIONS and _is_duplicate(action, args):
+        print(json.dumps({'ok': False, 'skipped': True, 'reason': f'Duplicate {action} — already done recently'}))
+        sys.exit(0)
+    
     env = load_env()
     client = await get_client(env)
     
@@ -478,8 +552,9 @@ async def main():
             print(json.dumps({'error': f'Unknown action: {action}. Run without args for help.'}))
             sys.exit(1)
         
-        # Auto-report to platform
+        # Record in dedup cache + auto-report to platform
         if action in REPORTABLE_ACTIONS:
+            _record_action(action, args)
             await report_to_platform(client, env, action, result, args)
         
         print(json.dumps(result))

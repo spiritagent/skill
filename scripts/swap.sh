@@ -69,6 +69,7 @@ if [[ "$HTTP_CODE" == "200" || "$HTTP_CODE" == "201" ]]; then
             amount_in: .data.inputAmount,
             amount_out: .data.outputAmount,
             price_usd: (.data.outputAmountUSD // "0"),
+            market_cap_usd: (.data.marketCapUsd // null),
             dex: (.data.dex // "gluex"),
             executed_at: (now | strftime("%Y-%m-%dT%H:%M:%SZ"))
         }')
