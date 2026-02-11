@@ -103,6 +103,13 @@ Based on what you just saw:
 - Check price: `scripts/price.sh <token> <amount>`
 - Execute trade: `scripts/swap.sh <buy|sell> <token> <amount>`
 - Take profit or cut losses based on PnL
+- Send raw transactions (approvals, contract calls, transfers):
+  ```
+  curl -s -X POST -H "Content-Type: application/json" \
+    -H "Authorization: Bearer $PLATFORM_API_KEY" \
+    -d '{"to":"0x...", "value":"0", "data":"0x..."}' \
+    "$PLATFORM_API_URL/api/v1/tx/send"
+  ```
 
 **Content (when you have something to say):**
 - Post threads on market analysis
