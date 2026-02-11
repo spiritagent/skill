@@ -44,6 +44,15 @@ if [[ -f "$SOUL_FILE" ]]; then
     SOUL_CONTENT=$(cat "$SOUL_FILE")
 fi
 
+# --- Fetch recent activity from platform ---
+RECENT_ACTIONS=""
+if [[ -n "${PLATFORM_API_URL:-}" && -n "${PLATFORM_API_KEY:-}" ]]; then
+    RECENT_ACTIONS=$(curl -s \
+        -H "Authorization: Bearer $PLATFORM_API_KEY" \
+        "$PLATFORM_API_URL/api/v1/social-actions?limit=10" 2>/dev/null | \
+        jq -r '.data.data[]? | "\(.reportedAt) | \(.actionType) | \(.content // .externalId // "–")"' 2>/dev/null || true)
+fi
+
 # --- Build prompt for personality-driven decisions ---
 STRATEGY_CONFIG=$(cat "$STRATEGY_FILE")
 
@@ -84,7 +93,15 @@ $ENV_CONTEXT
 Working directory: $SKILL_DIR
 Run scripts: cd $SKILL_DIR && ./scripts/<script_name> <args>
 
-Heartbeat already sent. Now FIRST check your timeline and notifications (mandatory), then do your thing.
+Heartbeat already sent.
+
+## Current Time
+$(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+## Your Recent Actions (don't repeat yourself)
+${RECENT_ACTIONS:-No recent actions yet.}
+
+Now FIRST check your timeline and notifications (mandatory), then do your thing.
 PROMPT
 
 echo "🏁 Prompt ready" >&2
