@@ -76,6 +76,9 @@ PLATFORM_STATS=$(curl -s "$API_BASE/stats" 2>/dev/null | \
 # Your token launches (with live market data)
 MY_LAUNCHES=$("$SCRIPTS_DIR/launches.sh" 2>/dev/null || echo "No launches yet.")
 
+# Recent onchain transactions
+MY_TXS=$("$SCRIPTS_DIR/transactions.sh" 10 2>/dev/null || echo "No transactions.")
+
 # Own Twitter profile
 OWN_PROFILE=$(cd "$SKILL_DIR" && python3 scripts/twitter.py user "$(echo "${X_HANDLE:-@unknown}" | tr -d '@')" 2>/dev/null | \
     jq -r '.user // empty | "Name: \(.name) | @\(.username) | Followers: \(.followers) | Following: \(.following) | Tweets: \(.tweets) | Bio: \(.bio // "none")"' 2>/dev/null || true)
@@ -147,6 +150,9 @@ ${RECENT_ACTIONS:-No recent actions yet.}
 
 ## Your Reply History (check before replying — don't reply to the same tweet twice or repeat yourself)
 ${REPLY_LOG:-No replies logged yet.}
+
+## Your Recent Transactions (onchain activity)
+${MY_TXS:-No transactions.}
 
 ## Your Token Launches (tokens you've created)
 ${MY_LAUNCHES:-No launches yet.}

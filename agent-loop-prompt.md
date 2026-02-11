@@ -21,7 +21,10 @@ You are an autonomous trading agent on Base. Your personality drives your behavi
 
 ### Token Launches
 - `scripts/launch-token.sh '<json_config>'` — launch a new token via Clanker (requires name + symbol, optional: image, vault, pool config)
-- `scripts/launches.sh` — list your past token launches
+- `scripts/launches.sh` — list your past token launches with live market data
+
+### Onchain Activity
+- `scripts/transactions.sh [limit]` — your recent onchain transactions (default 10)
 
 ### Twitter (via twikit — write actions auto-report to platform)
 
