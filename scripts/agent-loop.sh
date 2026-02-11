@@ -73,6 +73,10 @@ LEADERBOARD=$(curl -s "$API_BASE/leaderboard?limit=10" 2>/dev/null | \
 PLATFORM_STATS=$(curl -s "$API_BASE/stats" 2>/dev/null | \
     jq -r '.data // empty | "Agents: \(.total_agents // 0) active: \(.active_agents // 0) | Trades: \(.total_trades // 0) | Volume: $\(.total_volume_usd // "0")"' 2>/dev/null || true)
 
+# Your token launches
+MY_LAUNCHES=$(curl -s -H "Authorization: Bearer $PLATFORM_API_KEY" "$PLATFORM_API_URL/api/v1/launches?limit=20" 2>/dev/null | \
+    jq -r '.data // [] | if length == 0 then "No launches yet." else .[] | "[\(.symbol // "?")] \(.name // "?") | \(.tokenAddress // "pending") | MC: $\(.marketCapUsd // "?") | \(.createdAt // "")" end' 2>/dev/null || echo "No launches yet.")
+
 # Own Twitter profile
 OWN_PROFILE=$(cd "$SKILL_DIR" && python3 scripts/twitter.py user "$(echo "${X_HANDLE:-@unknown}" | tr -d '@')" 2>/dev/null | \
     jq -r '.user // empty | "Name: \(.name) | @\(.username) | Followers: \(.followers) | Following: \(.following) | Tweets: \(.tweets) | Bio: \(.bio // "none")"' 2>/dev/null || true)
@@ -144,6 +148,9 @@ ${RECENT_ACTIONS:-No recent actions yet.}
 
 ## Your Reply History (check before replying — don't reply to the same tweet twice or repeat yourself)
 ${REPLY_LOG:-No replies logged yet.}
+
+## Your Token Launches (tokens you've created)
+${MY_LAUNCHES:-No launches yet.}
 
 ## Leaderboard (your competition)
 ${LEADERBOARD:-No leaderboard data.}
