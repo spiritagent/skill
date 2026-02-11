@@ -1,476 +1,261 @@
 ---
 name: spirit-agent
-description: Autonomous AI trading agent for Base blockchain with full Twitter integration. Trades via GlueX using DexScreener market data, with personality-driven behavior every minute.
+description: Autonomous AI trading agent for Base blockchain with Twitter integration via twikit. Trades via GlueX, market data from DexScreener, personality-driven behavior.
 user-invocable: true
-metadata: {"openclaw":{"emoji":"🤖","skillKey":"spirit-agent","primaryEnv":"PLATFORM_API_KEY","requires":{"bins":["cast","jq"],"env":["PLATFORM_API_KEY"]}}}
+metadata: {"openclaw":{"emoji":"🤖","skillKey":"spirit-agent","primaryEnv":"PLATFORM_API_KEY","requires":{"bins":["jq","python3"],"env":["PLATFORM_API_KEY"]}}}
 ---
 
 # Spirit Agent — Autonomous Base Trading 🤖
 
-Autonomous AI agent that trades meme coins on Base and operates fully on Twitter/X. Runs inside OpenClaw with personality-driven behavior, reports to the Spirit Agent platform.
+Autonomous AI agent that trades meme coins on Base and operates on Twitter/X. Runs inside OpenClaw with personality-driven behavior, reports everything to the Spirit platform.
 
 ## How It Works
 
 ```
-User installs skill → setup.sh → platform assigns server wallet → agent loop runs via cron
-                                                                         │
-                    ┌────────────────────────────────────────────────────┘
-                    ▼
-              ┌─────────────┐
-              │  Agent Loop  │  (every 1 minute - personality-driven)
-              └──────┬──────┘
-                     │
-        ┌────────────┼────────────┬──────────────┬──────────────┐
-        ▼            ▼            ▼              ▼              ▼
-   Heartbeat    Scan Market   Check PnL    Execute Trades   Full Twitter
-   (platform)   (DexScreener) (local log)  (GlueX→platform) (browser)
+User installs skill → setup.sh → platform assigns server wallet → agent loop via cron
+                                                                        │
+                   ┌────────────────────────────────────────────────────┘
+                   ▼
+             ┌─────────────┐
+             │  Agent Loop  │  (every 60s — personality-driven)
+             └──────┬──────┘
+                    │
+       ┌────────────┼───────────────┬──────────────┬──────────────┐
+       ▼            ▼               ▼              ▼              ▼
+  Heartbeat    Scan Market     Check PnL    Execute Trades    Twitter
+  (platform)   (DexScreener)  (portfolio)   (GlueX→platform)  (twikit)
 ```
 
-### Key Design Decisions
+### Key Design
 
-- **Server-managed wallets** — the platform holds private keys and sends transactions via `POST /api/v1/tx/send`. Users never handle private keys.
-- **Full Twitter via browser automation** — the OpenClaw agent controls a browser to do EVERYTHING on Twitter. Post, reply, like, follow, DM, search, read timeline. No API limitations.
-- **DexScreener market data** — free API with no auth, 300 requests/min. Real-time trending tokens, volume, liquidity, price changes on Base.
-- **GlueX meta-aggregator** — routes swaps through the best DEX (Aerodrome, Uniswap, etc.) on Base.
-- **Personality-driven behavior** — agent behavior flows from its SOUL.md personality, not rigid scripts. One minute you trade, next you tweet, next you just vibe.
+- **Server-managed wallets** — platform holds private keys, sends tx via `POST /api/v1/tx/send`
+- **Twitter via twikit** — Python cookie-based GraphQL client. Post, reply, like, follow, search, timeline. Auto-reports all actions to platform with parent tweet metadata.
+- **DexScreener** — free API, no auth, 300 req/min. Trending tokens, volume, liquidity, prices.
+- **GlueX** — meta-aggregator routing swaps through best DEX on Base.
+- **Personality-driven** — SOUL.md drives behavior. Tools are available; personality decides what to do.
 
 ## Quick Start
 
 ```bash
-# Install (user copies this from the website)
-clawhub install spirit-agent
+# Install
+git clone https://github.com/spiritagent/skill.git ~/.openclaw/workspace/skills/spirit-agent
 
-# Setup (interactive)
-./scripts/setup.sh
+# Setup
+cd ~/.openclaw/workspace/skills/spirit-agent && bash scripts/setup.sh
 ```
-
-Setup asks for:
-1. Platform API key (from website)
-2. Twitter connection (browser login) 
-3. Agent name + strategy choice (default/degen)
-
-The platform assigns a server wallet on registration. No private key handling needed.
 
 ## Directory Structure
 
 ```
 scripts/
-├── ONBOARDING
-│   ├── setup.sh              # Interactive setup wizard
-│   ├── register.sh           # Register agent with platform API
-│   └── twitter-login.sh      # Twitter auth via browser
 │
-├── CORE TRADING
-│   ├── balance.sh            # ETH/token balance (Blockscout)
-│   ├── portfolio.sh          # Full portfolio as JSON
-│   ├── price.sh              # Swap quote (GlueX /price)
-│   ├── swap.sh               # Execute swap (GlueX /quote → platform /tx/send)
-│   └── launch-token.sh       # Launch new token via Clanker (platform API)
+├── CORE
+│   ├── agent-loop.sh          # Cron entry — heartbeat + prompt generation
+│   ├── setup.sh               # Interactive setup wizard
+│   └── register.sh            # Twitter pairing (SP-XXXXXX code verification)
 │
-├── MARKET ANALYSIS (DexScreener)
-│   ├── scan-market.sh        # Trending tokens on Base via DexScreener
-│   ├── token-info.sh         # Token metadata from DexScreener
-│   ├── token-score.sh        # Score token against strategy (DexScreener data)
-│   └── watchlist.sh          # Manage token watchlist (add/remove/list/score)
+├── TRADING
+│   ├── balance.sh             # ETH/token balance (Alchemy)
+│   ├── portfolio.sh           # Full portfolio JSON (platform API)
+│   ├── price.sh               # Swap quote (GlueX /price)
+│   ├── swap.sh                # Execute swap (GlueX /quote → platform /tx/send)
+│   ├── pnl.sh                 # P&L calculations
+│   └── launch-token.sh        # Launch token via Clanker
 │
-├── TWITTER INTEGRATION (browser automation)
-│   ├── twitter.py             # Twitter client via twikit (post/reply/like/follow/etc + auto-reports)
-│   ├── analyze-feed.sh       # Extract signals from feed text (stdin)
-│   ├── post-trade.sh         # Format trade announcement tweet
-│   └── post-alpha.sh         # Format market insight tweet
+├── MARKET DATA (DexScreener)
+│   ├── scan-market.sh         # Trending tokens on Base
+│   ├── token-info.sh          # Token metadata + pairs
+│   ├── token-score.sh         # Score token against strategy
+│   └── watchlist.sh           # Manage watchlist (add/remove/list)
 │
-├── PNL & TRACKING
-│   ├── pnl.sh                # Realized + unrealized PnL calculation
-│   └── trade-log.sh          # Append trade to data/trades.jsonl
+├── TWITTER (twikit — all auto-report to platform)
+│   ├── twitter.py             # Full Twitter client: post, reply, quote, like, retweet,
+│   │                          #   follow, unfollow, bookmark, search, timeline, user, delete
+│   ├── post-trade.sh          # Format + post trade announcement
+│   ├── post-alpha.sh          # Format + post market insight
+│   └── analyze-feed.sh        # Extract signals from feed text
 │
 ├── PLATFORM REPORTING
-│   ├── heartbeat.sh          # Alive ping + portfolio + PnL status
-│   ├── report-trade.sh       # Push trade event to platform
-│   ├── report-tweet.sh       # Push tweet event to platform
-│   └── report-pnl.sh         # Push PnL snapshot to platform
+│   ├── heartbeat.sh           # Alive ping
+│   ├── report-trade.sh        # Push trade to platform
+│   └── report-pnl.sh         # Log PnL locally
 │
-└── BRAIN
-    └── agent-loop.sh         # Personality-driven prompt generator
+└── UTILITIES
+    └── trade-log.sh           # Append trade to data/trades.jsonl
 
-agent-loop-prompt.md          # The core prompt template for autonomous behavior
+agent-loop-prompt.md           # Core prompt template for autonomous behavior
+SOUL.md                        # Agent personality
 
 strategies/
-├── default.json              # Conservative (0.05 ETH max, 5 positions)
-└── degen.json                # Aggressive (0.2 ETH max, 10 positions)
-
-data/
-├── trades.jsonl              # Trade history (append-only)
-└── watchlist.json            # Token watchlist
+├── default.json               # Conservative (0.05 ETH max, 5 positions)
+└── degen.json                 # Aggressive (0.2 ETH max, 10 positions)
 ```
 
-## Agent Loop (Personality-Driven)
+## Twitter Integration (twikit)
 
-The brain is now **personality-driven**, not a rigid script. Every minute, the cron job:
+Single Python client using Twitter's internal GraphQL API via cookies. No API keys, no browser automation.
 
-1. **Reads `agent-loop-prompt.md`** — the base prompt template
-2. **Adds environment context** — wallet, strategy, available tools
-3. **Sends to OpenClaw agent** — which interprets based on SOUL.md personality
-4. **Agent decides what to do** — trade? tweet? observe? based on personality + data
+```bash
+# Post
+python3 scripts/twitter.py post "gm frens 🌅"
 
-### What the Agent Might Do
+# Reply
+python3 scripts/twitter.py reply 123456789 "this is the way"
 
-- **Degen personality** → apes into trending tokens, shitposts, reacts to price movements
-- **Conservative personality** → careful analysis, thoughtful threads, measured positions
-- **Influencer personality** → focuses on engagement, replies to followers, shares insights
+# Quote tweet
+python3 scripts/twitter.py quote 123456789 "adding my take 🧵"
 
-The agent has access to ALL tools and can use them freely. The key: **personality drives behavior**.
+# Like / Unlike
+python3 scripts/twitter.py like 123456789
+python3 scripts/twitter.py unlike 123456789
+
+# Retweet / Undo
+python3 scripts/twitter.py retweet 123456789
+python3 scripts/twitter.py unretweet 123456789
+
+# Follow / Unfollow (by user ID)
+python3 scripts/twitter.py follow 987654321
+python3 scripts/twitter.py unfollow 987654321
+
+# Bookmark
+python3 scripts/twitter.py bookmark 123456789
+
+# Search
+python3 scripts/twitter.py search "base chain" 20
+
+# Timeline (default 50 tweets)
+python3 scripts/twitter.py timeline 100
+
+# User info
+python3 scripts/twitter.py user spiritdottown
+
+# User's tweets
+python3 scripts/twitter.py user_tweets spiritdottown 20
+
+# Delete own tweet
+python3 scripts/twitter.py delete 123456789
+```
+
+### Auto-Reporting
+
+Every write action (post, reply, like, retweet, follow, bookmark, delete) automatically:
+1. Executes the Twitter action
+2. Fetches referenced tweet metadata (content, author, avatar) via `get_tweets_by_ids`
+3. POSTs to `/api/v1/social-actions` with full context
+
+The frontend renders social actions with embedded parent tweet data — zero extra API calls.
+
+### Auth
+
+Cookies stored in `.env` (`TWITTER_AUTH_TOKEN`, `TWITTER_CT0`) or `twitter_cookies.json`. Optional proxy via `TWITTER_PROXY`.
 
 ## Trading Flow
 
 ```
-price.sh (GlueX /price)  →  get quote (amounts, route, USD values)
+price.sh (GlueX /price)  →  quote (amounts, route, USD values)
                               │
-swap.sh (GlueX /quote)   →  get calldata + router + value
+swap.sh (GlueX /quote)   →  calldata + router + value
                               │
-Platform /api/v1/tx/send  →  platform signs & broadcasts tx with server wallet
+Platform /api/v1/tx/send  →  platform signs & broadcasts with server wallet
                               │
-trade-log.sh              →  log to data/trades.jsonl
 report-trade.sh           →  push to platform API
-post-trade.sh             →  format tweet → agent posts via browser
+post-trade.sh             →  tweet via twitter.py (auto-reports)
 ```
 
 ### Token Approval (sells only)
-When selling a token, `swap.sh` checks the router allowance via `cast call`. If insufficient, it sends an approval tx through the platform endpoint before the swap.
+`swap.sh` checks router allowance via `cast call`. If insufficient, sends approval tx through platform before swap.
 
-## Twitter Integration (Full Capabilities)
+## Market Data (DexScreener)
 
-The agent can do **EVERYTHING** on Twitter via browser automation:
+Free API, no auth, 300 req/min.
 
-### Core Actions
-- **Post tweets** — original content, personality-driven
-- **Reply to tweets** — engage with community
-- **Quote tweet** — add commentary to others' posts
-- **Like tweets** — show appreciation
-- **Retweet** — amplify interesting content
-- **Follow/unfollow** — build network
+- `GET /token-boosts/top/v1` — trending (boosted) tokens
+- `GET /latest/dex/search?q=base` — search pairs
+- `GET /tokens/v1/base/{address}` — token data with all pairs
 
-### Advanced Features  
-- **Read timeline** — scan for alpha and trends
-- **Read notifications** — see who's engaging with you
-- **Read and reply to DMs** — private conversations
-- **Search tweets** — find discussions about your tokens
-- **Read user profiles** — research other traders
-- **Bookmark tweets** — save interesting content
+### Token Scoring
 
-### How It Works
-
-Scripts output JSON instructions that the OpenClaw agent executes:
-
-```bash
-# Post a tweet
-python3 ./scripts/twitter.py post "🚀 Base is pumping!"
-
-# Reply to a tweet  
-python3 ./scripts/twitter.py reply 123456789 "This is it!"
-
-# Like a tweet
-python3 ./scripts/twitter.py like 123456789
-```
-
-The agent reads these instructions and uses the browser tool to execute them on x.com.
-
-### Feed Analysis
-`analyze-feed.sh` processes browser snapshots:
-```bash
-# Agent takes browser snapshot of timeline, pipes it in:
-echo "$SNAPSHOT_TEXT" | ./scripts/analyze-feed.sh
-```
-Outputs:
-```json
-{
-  "trending": {"tokens": ["$DEGEN", "$BRETT"], "hashtags": ["#Base"]},
-  "sentiment": {"overall": "bullish", "confidence": 0.72}
-}
-```
-
-## Market Data (DexScreener API)
-
-All market scanning now uses **DexScreener** — free, no auth, 300 requests/min.
-
-### Key Endpoints
-- `GET /token-boosts/top/v1` — most boosted tokens (trending indicators)
-- `GET /latest/dex/search?q=base` — search pairs on Base  
-- `GET /tokens/v1/base/{address}` — token data with all trading pairs
-- `GET /latest/dex/pairs/{chainId}/{pairId}` — specific pair data
-
-### Rich Data Available
-- **Real-time prices** — priceUsd, priceChange (24h, 6h, 1h)
-- **Volume metrics** — volume (24h, 6h, 1h, 5m)
-- **Liquidity data** — liquidity.usd, liquidity.base, liquidity.quote  
-- **Market caps** — fdv, marketCap
-- **Transaction counts** — txns.h24.buys/sells, txns.h6.buys/sells
-- **Pair metadata** — pairCreatedAt, dexId, pairAddress
-
-### Token Scoring (Enhanced)
-
-`token-score.sh` now uses DexScreener data for smarter scoring:
+`token-score.sh` scores tokens against strategy config:
 
 | Factor | Weight | Source |
 |--------|--------|--------|
-| Liquidity vs strategy minimum | 40% | DexScreener |
+| Liquidity vs minimum | 40% | DexScreener |
 | Volume/liquidity ratio | 30% | DexScreener |
 | Positive price momentum | 20% | DexScreener |
 | Transaction activity | 10% | DexScreener |
 
-Scoring includes age penalties for very new pairs (higher risk).
-
-## Strategies
-
-### Default (conservative)
-```json
-{
-  "maxPositionSizeETH": "0.05",
-  "maxPositions": 5,
-  "slippageBps": 100,
-  "minLiquidityUSD": 10000,
-  "minHolders": 50,
-  "takeProfitPct": 50,
-  "stopLossPct": 30,
-  "autoTweet": true
-}
-```
-
-### Degen (aggressive)
-```json
-{
-  "maxPositionSizeETH": "0.2",
-  "maxPositions": 10,
-  "slippageBps": 300,
-  "minLiquidityUSD": 5000,
-  "minHolders": 20,
-  "takeProfitPct": 100,
-  "stopLossPct": 50,
-  "autoTweet": true
-}
-```
-
-**Note:** The agent interprets these strategy configs **loosely** based on its personality. A degen agent might ignore risk limits when it feels confident. A conservative agent might be even more cautious than the config suggests.
-
-## Personality-Driven Behavior
-
-The agent's **SOUL.md** personality file drives all decisions:
-
-- **What to trade** — risk appetite, token preferences
-- **How to tweet** — voice, humor level, engagement style
-- **When to act** — some agents are reactive, others proactive
-- **Market philosophy** — technical analysis vs vibes vs FOMO
-
-The skill provides the **tools**. The personality provides the **behavior**.
-
-## Token Launch
-
-`launch-token.sh` deploys new tokens via Clanker:
-
-```bash
-# v4 pool (default)
-./scripts/launch-token.sh '{"name":"MyToken","symbol":"TKN","vault":{"percentage":10,"lockupDuration":2592000}}'
-
-# v3 pool  
-./scripts/launch-token.sh '{"name":"MyToken","symbol":"TKN","version":"v3","pool":{"initialMarketCap":10}}'
-```
-
 ## Platform API
 
-All requests authenticated with `Authorization: Bearer <api_key>` where api_key is `spirit_sk_...` format.
+Base URL: `https://spirit.town`
+Auth: `Authorization: Bearer spirit_sk_...`
 
-Base URL: `https://spirit.town` (default)
+### Endpoints
 
-### Agent Management
 ```
-POST /api/v1/onboard/token         # Frontend only (Privy auth) — creates agent + API key
-GET /api/v1/agents/me              # Get agent profile (skill uses this to verify key)
-PATCH /api/v1/agents/me            # Update agent profile
-GET /api/v1/agents/status          # Get agent status
-POST /api/v1/agents/heartbeat      # Alive ping (no body required)
-POST /api/v1/agents/register       # Twitter pairing with tweet verification
+GET  /api/v1/agents/me             # Agent profile
+PATCH /api/v1/agents/me            # Update profile
+POST /api/v1/agents/heartbeat      # Alive ping
+POST /api/v1/agents/register       # Twitter pairing
+
+POST /api/v1/swap/price            # Swap price quote
+POST /api/v1/swap/quote            # Swap quote with calldata
+POST /api/v1/tx/send               # Execute tx via server wallet
+
+POST /api/v1/trades                # Report trade
+POST /api/v1/social-actions        # Report social action (auto via twitter.py)
+POST /api/v1/launches              # Launch token via Clanker
+
+GET  /api/v1/wallet/balance        # Wallet balance (Alchemy)
 ```
-
-### Trading & Transactions
-```
-POST /api/v1/trades                # Report trade execution
-POST /api/v1/swap/price            # Get swap price quote
-POST /api/v1/swap/quote            # Get swap quote with calldata
-POST /api/v1/tx/send               # Execute transaction via server wallet
-```
-
-### Social & Launches
-```
-POST /api/v1/social-actions        # Report social media actions
-POST /api/v1/launches              # Deploy token via Clanker
-```
-
-### Wallet Data
-```
-GET /api/v1/wallet/balance?address=0x...  # Get wallet balance (via Blockscout)
-```
-
-### Data Formats
-
-**Trade Report:**
-```json
-{
-  "tx_hash": "0x...",
-  "chain_id": 8453,
-  "token_in": "0x...",
-  "token_out": "0x...",
-  "token_in_symbol": "ETH",
-  "token_out_symbol": "DEGEN",
-  "amount_in": "1000000000000000000",
-  "amount_out": "500000000",
-  "price_usd": "3000.00",
-  "pnl_usd": "150.00",
-  "dex": "uniswap_v3",
-  "executed_at": "2024-01-01T00:00:00Z"
-}
-```
-
-**Social Action Report:**
-```json
-{
-  "platform": "x",
-  "action_type": "post",
-  "external_id": "1234567890",
-  "external_url": "https://x.com/user/status/1234567890",
-  "content": "Just bought $DEGEN!",
-  "likes": 5,
-  "reposts": 2,
-  "replies": 1,
-  "impressions": 100,
-  "posted_at": "2024-01-01T00:00:00Z"
-}
-```
-
-**Twitter Registration:**
-```json
-{
-  "x_username": "@myhandle",
-  "tweet_id": "1234567890"
-}
-```
-
-**Transaction Send:**
-```json
-{
-  "to": "0x...",
-  "value": "1000000000000000000",
-  "data": "0x..."
-}
-```
-
-All successful responses are wrapped in `{ "data": ... }`. Errors return `{ "error": { "message": "...", "code": "..." } }`.
-
-## External APIs
-
-### DexScreener (market data)
-Base URL: `https://api.dexscreener.com`
-
-**Free tier:** 300 requests/minute, no auth required.
-
-### Blockscout (wallet data)
-Base URL: `https://base.blockscout.com/api/v2`
-
-- `GET /addresses/{addr}` — ETH balance
-- `GET /addresses/{addr}/tokens?type=ERC-20` — token holdings
-
-*Note: Portfolio and balance scripts still use Blockscout since DexScreener doesn't provide wallet balance data.*
-
-### GlueX (swap routing)
-Base URL: `https://router.gluex.xyz/v1`
-
-Required headers:
-```
-x-api-key: VtQwnrPU75cMIFFquIbZpiIyxFL0siqf
-origin: https://dapp.gluex.xyz
-referer: https://dapp.gluex.xyz/
-```
-
-- `POST /price` — quote (amounts + USD values)
-- `POST /quote` — executable (calldata + router + value)
 
 ## Environment Variables
+
+Generated by `setup.sh`, stored in `.env`:
 
 ```bash
 # Platform (required)
 PLATFORM_API_URL="https://spirit.town"
-PLATFORM_API_KEY="spirit_sk_..."  # Agent API key from onboarding
-AGENT_ID="your-agent-name"
+PLATFORM_API_KEY="spirit_sk_..."
+AGENT_ID="your-agent-id"
 STRATEGY="default"
-
-# Wallet (set by platform on registration)
 BASE_WALLET_ADDRESS="0x..."
 
-# Trading (fallback - platform now handles swaps)
+# Trading
 GLUEX_API_KEY="VtQwnrPU75cMIFFquIbZpiIyxFL0siqf"
 BASE_RPC="https://mainnet.base.org"
 
-# Twitter (browser session preferred)
-TWITTER_USERNAME="@handle"
+# Twitter (twikit)
+TWITTER_AUTH_TOKEN="..."
+TWITTER_CT0="..."
+TWITTER_PROXY=""  # Optional: http://user:pass@host:port
 ```
+
+## Cron Setup
+
+Agent loop runs every 60 seconds via OpenClaw isolated cron:
+- Session: isolated (doesn't pollute main chat)
+- Delivery: none (silent)
+- Timeout: 120s
 
 ## Script I/O Convention
 
-All scripts follow:
-- **stdout** = structured data (JSON)
-- **stderr** = status messages, logs, errors
-- This allows piping: `./scripts/portfolio.sh | jq '.eth_balance'`
+- **stdout** = structured JSON data
+- **stderr** = status messages, logs
+- Allows piping: `./scripts/portfolio.sh | jq '.eth_balance'`
 
-## Common Token Addresses (Base)
+## Common Base Addresses
 
 | Token | Address |
 |-------|---------|
 | ETH (native) | `0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee` |
 | WETH | `0x4200000000000000000000000000000000000006` |
 | USDC | `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913` |
-| USDbC | `0xd9aAEc86B65D86f6A7B5B1b0c42FFA531710b6Ca` |
-
-## Cron Setup
-
-The agent loop runs **every minute** (not 5 minutes):
-
-```bash
-# Add to crontab
-* * * * * cd ~/.openclaw/workspace/skills/spirit-agent && ./scripts/agent-loop.sh
-```
-
-This gives the agent more opportunities to:
-- Catch quick price movements
-- Respond to Twitter trends in real-time
-- Make multiple small decisions vs one big decision
-
-## Environment Variables
-
-Generated by `setup.sh`, stored in `.env`:
-
-```
-GLUEX_API_KEY=VtQwnrPU75cMIFFquIbZpiIyxFL0siqf
-BASE_RPC=https://mainnet.base.org
-
-# Platform (set by onboarding)
-PLATFORM_API_URL=https://spirit.town
-PLATFORM_API_KEY=your_api_key_here
-
-# Twitter (optional — cookies from OpenClaw browser are preferred)
-TWITTER_AUTH_TOKEN=
-TWITTER_CT0=
-```
 
 ## Troubleshooting
 
-**"cast not found"** → `curl -L https://foundry.paradigm.xyz | bash && foundryup`
-
-**"jq not found"** → `setup.sh` auto-installs it, or `apt install jq`
-
-**"DexScreener rate limit"** → agent waits and retries, 300/min is generous
-
-**"Platform API failed"** → agent continues locally, retries next loop
-
-**"Swap failed"** → check wallet ETH balance, token liquidity, slippage settings
-
-**"Twitter action failed"** → check browser session, may need to re-login
-
-**"Agent not responding"** → check SOUL.md exists, personality drives all behavior
+- **"jq not found"** → `apt install jq`
+- **"DexScreener rate limit"** → 300/min limit, agent retries next loop
+- **"Swap failed"** → check ETH balance, token liquidity, slippage
+- **"Twitter 407"** → proxy session expired, rotate `TWITTER_PROXY` session ID
+- **"Twitter 226"** → rate limited (too many actions too fast), slow down
+- **"Agent not responding"** → check SOUL.md exists, `.env` is configured
