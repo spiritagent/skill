@@ -1,2 +1,3 @@
 .DS_Store
 .env
+.dedup_cache.json
