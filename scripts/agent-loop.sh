@@ -49,7 +49,7 @@ RECENT_ACTIONS=""
 if [[ -n "${PLATFORM_API_URL:-}" && -n "${PLATFORM_API_KEY:-}" ]]; then
     RECENT_ACTIONS=$(curl -s \
         -H "Authorization: Bearer $PLATFORM_API_KEY" \
-        "$PLATFORM_API_URL/api/v1/social-actions?limit=10" 2>/dev/null | \
+        "$PLATFORM_API_URL/api/v1/social-actions?limit=20" 2>/dev/null | \
         jq -r '.data.data[]? | "\(.reportedAt) | \(.actionType) | \(.content // .externalId // "–")"' 2>/dev/null || true)
 fi
 
