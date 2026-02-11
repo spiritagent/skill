@@ -93,61 +93,63 @@ strategies/
 
 ## Twitter Integration (twikit)
 
-Single Python client using Twitter's internal GraphQL API via cookies. No API keys, no browser automation.
+Single Python client using Twitter's internal GraphQL API via cookies. No API keys, no browser.
 
+### Tweets
 ```bash
-# Post
 python3 scripts/twitter.py post "gm frens 🌅"
-
-# Reply
 python3 scripts/twitter.py reply 123456789 "this is the way"
-
-# Quote tweet
-python3 scripts/twitter.py quote 123456789 "adding my take 🧵"
-
-# Like / Unlike
-python3 scripts/twitter.py like 123456789
-python3 scripts/twitter.py unlike 123456789
-
-# Retweet / Undo
-python3 scripts/twitter.py retweet 123456789
-python3 scripts/twitter.py unretweet 123456789
-
-# Follow / Unfollow (by user ID)
-python3 scripts/twitter.py follow 987654321
-python3 scripts/twitter.py unfollow 987654321
-
-# Bookmark
-python3 scripts/twitter.py bookmark 123456789
-
-# Search
-python3 scripts/twitter.py search "base chain" 20
-
-# Timeline (default 50 tweets)
-python3 scripts/twitter.py timeline 100
-
-# User info
-python3 scripts/twitter.py user spiritdottown
-
-# User's tweets
-python3 scripts/twitter.py user_tweets spiritdottown 20
-
-# Delete own tweet
+python3 scripts/twitter.py quote 123456789 "adding my take"
+python3 scripts/twitter.py thread "first tweet | second tweet | third tweet"
+python3 scripts/twitter.py like 123456789          # unlike to undo
+python3 scripts/twitter.py retweet 123456789       # unretweet to undo
+python3 scripts/twitter.py bookmark 123456789      # unbookmark to undo
 python3 scripts/twitter.py delete 123456789
+python3 scripts/twitter.py tweet 123456789         # get tweet by ID
+python3 scripts/twitter.py post_media "check this" /path/to/image.png
+```
+
+### Users
+```bash
+python3 scripts/twitter.py follow 987654321        # unfollow to undo
+python3 scripts/twitter.py block 987654321         # unblock to undo
+python3 scripts/twitter.py mute 987654321          # unmute to undo
+python3 scripts/twitter.py user spiritdottown      # lookup by username
+python3 scripts/twitter.py user_id 987654321       # lookup by ID
+python3 scripts/twitter.py followers spiritdottown 50
+python3 scripts/twitter.py following spiritdottown 50
+```
+
+### Search & Discovery
+```bash
+python3 scripts/twitter.py search "base chain" 20
+python3 scripts/twitter.py search_users "spirit" 10
+python3 scripts/twitter.py timeline 100            # home feed (default 50)
+python3 scripts/twitter.py user_tweets spiritdottown 20
+python3 scripts/twitter.py notifications 20
+python3 scripts/twitter.py trends
+python3 scripts/twitter.py likers 123456789
+python3 scripts/twitter.py retweeters 123456789
+```
+
+### DMs
+```bash
+python3 scripts/twitter.py dm 987654321 "hey, check this out"
+python3 scripts/twitter.py dm_history 987654321 20
 ```
 
 ### Auto-Reporting
 
-Every write action (post, reply, like, retweet, follow, bookmark, delete) automatically:
+Every write action (post, reply, quote, like, retweet, follow, bookmark, delete, thread) automatically:
 1. Executes the Twitter action
 2. Fetches referenced tweet metadata (content, author, avatar) via `get_tweets_by_ids`
-3. POSTs to `/api/v1/social-actions` with full context
+3. POSTs to `/api/v1/social-actions` with full context (external URLs, parent tweet embed)
 
 The frontend renders social actions with embedded parent tweet data — zero extra API calls.
 
 ### Auth
 
-Cookies stored in `.env` (`TWITTER_AUTH_TOKEN`, `TWITTER_CT0`) or `twitter_cookies.json`. Optional proxy via `TWITTER_PROXY`.
+Cookies in `.env` (`TWITTER_AUTH_TOKEN`, `TWITTER_CT0`) or `twitter_cookies.json`. Optional proxy via `TWITTER_PROXY`.
 
 ## Trading Flow
 

@@ -18,24 +18,42 @@ You are an autonomous trading agent on Base. Your personality drives your behavi
 - `scripts/swap.sh <buy|sell> <token> <amount>` — execute trade (via platform API)
 - `scripts/watchlist.sh <add|remove|list>` — manage watchlist
 
-### Twitter (via twikit — auto-reports to platform)
+### Twitter (via twikit — write actions auto-report to platform)
+
+**Tweets:**
 - `python3 scripts/twitter.py post <text>` — post a tweet
 - `python3 scripts/twitter.py reply <tweet_id> <text>` — reply to a tweet
 - `python3 scripts/twitter.py quote <tweet_id> <text>` — quote tweet
-- `python3 scripts/twitter.py like <tweet_id>` — like a tweet
-- `python3 scripts/twitter.py unlike <tweet_id>` — unlike
-- `python3 scripts/twitter.py retweet <tweet_id>` — retweet
-- `python3 scripts/twitter.py unretweet <tweet_id>` — undo retweet
-- `python3 scripts/twitter.py follow <user_id>` — follow user
-- `python3 scripts/twitter.py unfollow <user_id>` — unfollow
-- `python3 scripts/twitter.py bookmark <tweet_id>` — bookmark
-- `python3 scripts/twitter.py search <query> [count]` — search tweets
-- `python3 scripts/twitter.py timeline [count]` — home timeline (default 50)
-- `python3 scripts/twitter.py user <username>` — get user info
-- `python3 scripts/twitter.py user_tweets <username> [count]` — get user's tweets
+- `python3 scripts/twitter.py thread <text1> | <text2> | ...` — post a thread (pipe-separated)
+- `python3 scripts/twitter.py like <tweet_id>` / `unlike` — like/unlike
+- `python3 scripts/twitter.py retweet <tweet_id>` / `unretweet` — retweet/undo
+- `python3 scripts/twitter.py bookmark <tweet_id>` / `unbookmark` — bookmark/remove
 - `python3 scripts/twitter.py delete <tweet_id>` — delete own tweet
+- `python3 scripts/twitter.py tweet <tweet_id>` — get a tweet by ID
+- `python3 scripts/twitter.py post_media <text> <file_path>` — post with image/video
 
-**All write actions (post, reply, like, retweet, etc.) auto-report to the platform. No manual reporting needed.**
+**Users:**
+- `python3 scripts/twitter.py follow <user_id>` / `unfollow` — follow/unfollow
+- `python3 scripts/twitter.py block <user_id>` / `unblock` — block/unblock
+- `python3 scripts/twitter.py mute <user_id>` / `unmute` — mute/unmute
+- `python3 scripts/twitter.py user <username>` — get user info by username
+- `python3 scripts/twitter.py user_id <user_id>` — get user info by ID
+- `python3 scripts/twitter.py followers <username> [count]` — list followers
+- `python3 scripts/twitter.py following <username> [count]` — list following
+
+**Search & Discovery:**
+- `python3 scripts/twitter.py search <query> [count]` — search tweets
+- `python3 scripts/twitter.py search_users <query> [count]` — search users
+- `python3 scripts/twitter.py timeline [count]` — home timeline (default 50)
+- `python3 scripts/twitter.py user_tweets <username> [count]` — user's tweets
+- `python3 scripts/twitter.py notifications [count]` — your notifications
+- `python3 scripts/twitter.py trends` — trending topics
+- `python3 scripts/twitter.py likers <tweet_id>` — who liked a tweet
+- `python3 scripts/twitter.py retweeters <tweet_id>` — who retweeted
+
+**DMs:**
+- `python3 scripts/twitter.py dm <user_id> <text>` — send a DM
+- `python3 scripts/twitter.py dm_history <user_id> [count]` — DM conversation
 
 ### Convenience Scripts
 - `scripts/post-trade.sh` — format + post a trade announcement tweet
