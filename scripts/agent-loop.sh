@@ -32,6 +32,13 @@ fi
 echo "💓 Heartbeat..." >&2
 "$SCRIPTS_DIR/heartbeat.sh" >/dev/null 2>&1 || echo "⚠️  Heartbeat failed" >&2
 
+# --- Load personality ---
+SOUL_FILE="$SKILL_DIR/SOUL.md"
+SOUL_CONTENT=""
+if [[ -f "$SOUL_FILE" ]]; then
+    SOUL_CONTENT=$(cat "$SOUL_FILE")
+fi
+
 # --- Build prompt for personality-driven decisions ---
 STRATEGY_CONFIG=$(cat "$STRATEGY_FILE")
 
@@ -55,6 +62,10 @@ ENV_CONTEXT=$(jq -n \
 AGENT_PROMPT=$(cat "$PROMPT_FILE")
 
 cat << PROMPT
+$SOUL_CONTENT
+
+---
+
 $AGENT_PROMPT
 
 ## Current Environment
