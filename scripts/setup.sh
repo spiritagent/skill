@@ -186,7 +186,7 @@ ACTION_REQUIRED:
    b. Tweet: "🤖 Activating my Spirit Agent! ${PAIRING_CODE:-} @spiritdottown"
    c. Get the tweet ID from the posted tweet
    d. Run: ${SKILL_DIR}/scripts/register.sh "${X_HANDLE:-}" <tweet_id>
-   e. The register script will auto-delete the pairing tweet after verification
+   e. The pairing tweet stays on the timeline (do NOT delete it)
 
 4. Read ${SKILL_DIR}/SKILL.md for full documentation
 ACTIONS
