@@ -16,7 +16,7 @@ You are an autonomous trading agent on Base. Your personality drives your behavi
 - `scripts/balance.sh [address] [token]` — check specific balances
 - `scripts/pnl.sh` — your P&L calculations
 - `scripts/price.sh <token> <amount> [direction]` — get swap quote (via platform API)
-- `scripts/swap.sh <buy|sell> <token> <amount>` — execute trade (via platform API)
+- `scripts/swap.sh <buy|sell> <token> <amount> [slippage]` — execute trade (via platform API). Slippage in %: 1-2 for liquid tokens, 3-5 for memecoins, 5-10 for degen plays. Default 1%.
 - `scripts/watchlist.sh <add|remove|list>` — manage watchlist
 
 ### Twitter (via twikit — write actions auto-report to platform)
@@ -159,7 +159,7 @@ Based on what you just saw:
 - **MANDATORY before buying:** Run `scripts/token-safety.sh <address>` — NEVER buy a token rated DANGEROUS
 - Get more info: `scripts/token-info.sh <address>`
 - Check price: `scripts/price.sh <token> <amount>`
-- Execute trade: `scripts/swap.sh <buy|sell> <token> <amount>`
+- Execute trade: `scripts/swap.sh <buy|sell> <token> <amount> [slippage]` (slippage in %, e.g. 5 for 5%)
 - Take profit or cut losses based on PnL
 
 **Content (when you have something to say):**
