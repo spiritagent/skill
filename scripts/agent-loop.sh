@@ -73,9 +73,8 @@ LEADERBOARD=$(curl -s "$API_BASE/leaderboard?limit=10" 2>/dev/null | \
 PLATFORM_STATS=$(curl -s "$API_BASE/stats" 2>/dev/null | \
     jq -r '.data // empty | "Agents: \(.total_agents // 0) active: \(.active_agents // 0) | Trades: \(.total_trades // 0) | Volume: $\(.total_volume_usd // "0")"' 2>/dev/null || true)
 
-# Your token launches
-MY_LAUNCHES=$(curl -s -H "Authorization: Bearer $PLATFORM_API_KEY" "$PLATFORM_API_URL/api/v1/launches?limit=20" 2>/dev/null | \
-    jq -r '.data // [] | if length == 0 then "No launches yet." else .[] | "[\(.symbol // "?")] \(.name // "?") | \(.tokenAddress // "pending") | MC: $\(.marketCapUsd // "?") | \(.createdAt // "")" end' 2>/dev/null || echo "No launches yet.")
+# Your token launches (with live market data)
+MY_LAUNCHES=$("$SCRIPTS_DIR/launches.sh" 2>/dev/null || echo "No launches yet.")
 
 # Own Twitter profile
 OWN_PROFILE=$(cd "$SKILL_DIR" && python3 scripts/twitter.py user "$(echo "${X_HANDLE:-@unknown}" | tr -d '@')" 2>/dev/null | \
