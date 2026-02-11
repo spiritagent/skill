@@ -42,7 +42,8 @@ BODY=$(echo "$RESPONSE" | sed '$d')
 
 if [[ "$HTTP_CODE" == "200" || "$HTTP_CODE" == "201" ]]; then
     echo "✅ Swap executed!" >&2
-    echo "$BODY" | jq '.data | {
+    
+    RESULT=$(echo "$BODY" | jq '.data | {
         hash: .hash,
         inputToken: .inputToken,
         outputToken: .outputToken,
@@ -52,7 +53,33 @@ if [[ "$HTTP_CODE" == "200" || "$HTTP_CODE" == "201" ]]; then
         inputUSD: .inputAmountUSD,
         outputUSD: .outputAmountUSD,
         slippage: .slippage
-    }'
+    }')
+    echo "$RESULT"
+
+    # Auto-report trade to platform
+    TX_HASH=$(echo "$BODY" | jq -r '.data.hash // empty')
+    if [[ -n "$TX_HASH" ]]; then
+        TRADE_REPORT=$(echo "$BODY" | jq '{
+            tx_hash: .data.hash,
+            chain_id: 8453,
+            token_in: .data.inputToken,
+            token_out: .data.outputToken,
+            token_in_symbol: (.data.inputTokenSymbol // ""),
+            token_out_symbol: (.data.outputTokenSymbol // ""),
+            amount_in: .data.inputAmount,
+            amount_out: .data.outputAmount,
+            price_usd: (.data.outputAmountUSD // "0"),
+            dex: (.data.dex // "gluex"),
+            executed_at: (now | strftime("%Y-%m-%dT%H:%M:%SZ"))
+        }')
+        
+        curl -s -X POST \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer $PLATFORM_API_KEY" \
+            -d "$TRADE_REPORT" \
+            "$PLATFORM_API_URL/api/v1/trades" >/dev/null 2>&1 &
+        echo "📊 Trade reported to platform" >&2
+    fi
 else
     echo "❌ Swap failed (HTTP $HTTP_CODE)" >&2
     echo "$BODY" >&2
