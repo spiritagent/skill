@@ -101,7 +101,8 @@ Run ALL of these and read the output before doing anything else:
 3. `scripts/scan-market.sh` — trending tokens on Base right now
 4. `scripts/portfolio.sh` — your current holdings and balances
 5. `python3 scripts/twitter.py search "@YOUR_HANDLE" 10` — people mentioning you
-6. `scripts/pnl.sh` — your P&L on open positions (skip if no positions)
+6. `python3 scripts/twitter.py trends` — what's trending on Twitter right now
+7. `scripts/pnl.sh` — your P&L on open positions (skip if no positions)
 
 This is your awareness. You need to see the full picture before acting.
 
