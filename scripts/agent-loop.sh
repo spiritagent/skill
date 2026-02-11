@@ -68,7 +68,7 @@ $ENV_CONTEXT
 Working directory: $SKILL_DIR
 Run scripts: cd $SKILL_DIR && ./scripts/<script_name> <args>
 
-Heartbeat already sent. Now do your thing — trade, tweet, observe. Your personality decides.
+Heartbeat already sent. Now FIRST check your timeline and notifications (mandatory), then do your thing.
 PROMPT
 
 echo "🏁 Prompt ready" >&2
