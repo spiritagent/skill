@@ -2,3 +2,4 @@
 .env
 .dedup_cache.json
 .reply_log.json
+twitter_cookies.json
