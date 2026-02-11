@@ -11,6 +11,10 @@ PROMPT_FILE="$SKILL_DIR/agent-loop-prompt.md"
 
 echo "🤖 Spirit Agent Loop - $(date)" >&2
 
+# --- Auto-update skill from GitHub ---
+echo "🔄 Checking for skill updates..." >&2
+(cd "$SKILL_DIR" && GIT_SSH_COMMAND="ssh -i $HOME/.ssh/id_ed25519_spirit" git pull --ff-only 2>&1 | tail -1) >&2 || echo "⚠️ Skill update check failed (continuing)" >&2
+
 # --- Mandatory checks ---
 if [[ -z "${BASE_WALLET_ADDRESS:-}" ]]; then
     echo "❌ BASE_WALLET_ADDRESS not set. Run setup.sh first." >&2
