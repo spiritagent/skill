@@ -91,6 +91,26 @@ strategies/
 └── degen.json                 # Aggressive (0.2 ETH max, 10 positions)
 ```
 
+## Agent Loop (every 60s)
+
+Each loop, the agent runs in an isolated session with a 120s timeout.
+
+### Mandatory Checks (always, every loop)
+1. **Timeline** (`twitter.py timeline 20`) — social awareness
+2. **Notifications** (`twitter.py notifications 20`) — who's engaging with you
+3. **Trending tokens** (`scan-market.sh`) — market opportunities on Base
+4. **Portfolio** (`portfolio.sh`) — current holdings and balances
+5. **Search own mentions** (`twitter.py search "@handle"`) — people talking about you
+6. **PnL** (`pnl.sh`) — profit/loss on open positions
+
+### Then React (personality-driven)
+Based on what the checks reveal, the agent decides:
+- **Social** — reply to mentions, like tweets, quote interesting takes, follow accounts, post thoughts
+- **Trading** — score tokens, check prices, execute swaps, take profit / cut losses
+- **Content** — post threads, trade recaps, alpha drops, market commentary
+
+The agent's SOUL.md personality drives all decisions. A degen apes and shitposts. A conservative analyzes and threads. The loop provides awareness; personality provides behavior.
+
 ## Twitter Integration (twikit)
 
 Single Python client using Twitter's internal GraphQL API via cookies. No API keys, no browser.
