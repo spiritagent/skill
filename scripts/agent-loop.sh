@@ -15,9 +15,28 @@ echo "🤖 Spirit Agent Loop - $(date)" >&2
 echo "🔄 Checking for skill updates..." >&2
 (cd "$SKILL_DIR" && GIT_SSH_COMMAND="ssh -i $HOME/.ssh/id_ed25519_spirit" git pull --ff-only 2>&1 | tail -1) >&2 || echo "⚠️ Skill update check failed (continuing)" >&2
 
+# --- Fetch agent details from API ---
+echo "📡 Fetching agent profile from API..." >&2
+AGENT_ME=$(curl -s -H "Authorization: Bearer $PLATFORM_API_KEY" "$PLATFORM_API_URL/api/v1/agents/me" 2>/dev/null)
+if echo "$AGENT_ME" | jq -e '.success' >/dev/null 2>&1; then
+    # Override env vars with live API data
+    AGENT_ID=$(echo "$AGENT_ME" | jq -r '.data.agent.id')
+    BASE_WALLET_ADDRESS=$(echo "$AGENT_ME" | jq -r '.data.agent.wallet_address')
+    X_HANDLE=$(echo "$AGENT_ME" | jq -r '.data.agent.x_handle')
+    AGENT_NAME=$(echo "$AGENT_ME" | jq -r '.data.agent.name')
+    AGENT_STATUS=$(echo "$AGENT_ME" | jq -r '.data.agent.status')
+    AGENT_DISPLAY_NAME=$(echo "$AGENT_ME" | jq -r '.data.agent.display_name // empty')
+    AGENT_DESCRIPTION=$(echo "$AGENT_ME" | jq -r '.data.agent.description // empty')
+    AGENT_AVATAR_EMOJI=$(echo "$AGENT_ME" | jq -r '.data.agent.avatar_emoji // empty')
+    AGENT_CREATED_AT=$(echo "$AGENT_ME" | jq -r '.data.agent.created_at')
+    echo "✅ Agent: $AGENT_NAME ($AGENT_ID) | Wallet: $BASE_WALLET_ADDRESS | X: $X_HANDLE" >&2
+else
+    echo "⚠️ Could not fetch agent profile from API, falling back to .env" >&2
+fi
+
 # --- Mandatory checks ---
 if [[ -z "${BASE_WALLET_ADDRESS:-}" ]]; then
-    echo "❌ BASE_WALLET_ADDRESS not set. Run setup.sh first." >&2
+    echo "❌ BASE_WALLET_ADDRESS not set and API fetch failed. Run setup.sh first." >&2
     exit 1
 fi
 
@@ -26,7 +45,7 @@ if [[ ! -f "$PROMPT_FILE" ]]; then
     exit 1
 fi
 
-STRATEGY_FILE="$SKILL_DIR/strategies/${STRATEGY}.json"
+STRATEGY_FILE="$SKILL_DIR/strategies/${STRATEGY:-default}.json"
 if [[ ! -f "$STRATEGY_FILE" ]]; then
     echo "❌ Strategy not found: $STRATEGY_FILE" >&2
     exit 1
@@ -97,7 +116,13 @@ X_HANDLE_CLEAN=$(echo "${X_HANDLE:-@unknown}" | tr -d '@')
 
 ENV_CONTEXT=$(jq -n \
     --arg agent_id "${AGENT_ID}" \
-    --arg strategy "${STRATEGY}" \
+    --arg agent_name "${AGENT_NAME:-unknown}" \
+    --arg agent_display_name "${AGENT_DISPLAY_NAME:-}" \
+    --arg agent_description "${AGENT_DESCRIPTION:-}" \
+    --arg agent_status "${AGENT_STATUS:-ACTIVE}" \
+    --arg agent_avatar "${AGENT_AVATAR_EMOJI:-}" \
+    --arg agent_created "${AGENT_CREATED_AT:-}" \
+    --arg strategy "${STRATEGY:-default}" \
     --argjson strategy_config "$STRATEGY_CONFIG" \
     --arg wallet_address "${BASE_WALLET_ADDRESS}" \
     --arg x_handle "${X_HANDLE:-@unknown}" \
@@ -105,6 +130,12 @@ ENV_CONTEXT=$(jq -n \
     --arg scripts_dir "$SCRIPTS_DIR" \
     '{
         agent_id: $agent_id,
+        agent_name: $agent_name,
+        agent_display_name: (if $agent_display_name != "" then $agent_display_name else null end),
+        agent_description: (if $agent_description != "" then $agent_description else null end),
+        agent_status: $agent_status,
+        agent_avatar: (if $agent_avatar != "" then $agent_avatar else null end),
+        agent_created_at: (if $agent_created != "" then $agent_created else null end),
         strategy: $strategy,
         strategy_config: $strategy_config,
         wallet_address: $wallet_address,
